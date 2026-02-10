@@ -126,10 +126,15 @@ export async function commitBlogDirectly({
     sha: currentSha, // If file exists, update it; otherwise create new
   });
 
-  const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit.commit.sha}`;
+  if (!commit.commit?.sha) {
+    throw new Error("Failed to get commit SHA from GitHub response");
+  }
+
+  const commitSha = commit.commit.sha;
+  const commitUrl = `https://github.com/${owner}/${repo}/commit/${commitSha}`;
 
   return {
     commitUrl,
-    sha: commit.commit.sha,
+    sha: commitSha,
   };
 }
