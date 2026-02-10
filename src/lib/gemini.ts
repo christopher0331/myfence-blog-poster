@@ -65,10 +65,27 @@ Format your response as JSON with the following structure:
 
 Start writing now:`;
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
+  // Determine which model to use
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const fallbackModel = "gemini-2.5-flash";
+
+  // Try these endpoints in order:
+  // 1. GEMINI_MODEL (or gemini-2.5-flash) with v1beta API
+  // 2. Same model with v1 API
+  // 3. Falls back to gemini-2.5-flash with v1beta API
+  const endpoints = [
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`,
+  ];
+
+  let lastError: Error | null = null;
+  let response: Response | null = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`[Gemini] Trying endpoint: ${endpoint.split('?')[0]}`);
+      response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,22 +107,35 @@ Start writing now:`;
             maxOutputTokens: 8192,
           },
         }),
-      }
-    );
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        console.log(`[Gemini] Successfully connected to: ${endpoint.split('?')[0]}`);
+        break; // Success, exit the loop
+      }
+
+      // If not OK, try to get error message
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
       try {
         const errorData = await response.json();
         errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
-        console.error("Gemini API error response:", errorData);
+        console.error(`[Gemini] API error from ${endpoint.split('?')[0]}:`, errorData);
       } catch (parseError) {
         const text = await response.text().catch(() => "");
         errorMessage = text || errorMessage;
-        console.error("Failed to parse Gemini error:", text);
       }
-      throw new Error(`Gemini API error: ${errorMessage}`);
+      lastError = new Error(`Gemini API error: ${errorMessage}`);
+    } catch (fetchError: any) {
+      console.error(`[Gemini] Fetch error for ${endpoint.split('?')[0]}:`, fetchError);
+      lastError = new Error(`Failed to fetch: ${fetchError.message}`);
+      continue; // Try next endpoint
     }
+  }
+
+  // If all endpoints failed, throw the last error
+  if (!response || !response.ok) {
+    throw lastError || new Error("All Gemini API endpoints failed");
+  }
 
     const data = await response.json();
 
