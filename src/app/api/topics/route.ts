@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 function getAdminClient() {
-  return createClient(supabaseUrl, supabaseServiceKey);
+  if (!supabaseUrl) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
+  }
+  if (!supabaseServiceKey) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
+  }
+  return createClient(supabaseUrl.trim(), supabaseServiceKey.trim());
 }
 
 export async function GET(request: NextRequest) {
@@ -28,12 +34,27 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("Supabase error:", error);
+      return NextResponse.json(
+        { 
+          error: error.message,
+          details: error.details || null,
+          hint: error.hint || null
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ data });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("API route error:", error);
+    return NextResponse.json(
+      { 
+        error: error.message || "Internal server error",
+        type: error.constructor.name
+      },
+      { status: 500 }
+    );
   }
 }
 
