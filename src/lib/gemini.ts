@@ -94,8 +94,17 @@ Start writing now:`;
     );
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: "Unknown error" }));
-      throw new Error(`Gemini API error: ${error.error?.message || JSON.stringify(error)}`);
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+        console.error("Gemini API error response:", errorData);
+      } catch (parseError) {
+        const text = await response.text().catch(() => "");
+        errorMessage = text || errorMessage;
+        console.error("Failed to parse Gemini error:", text);
+      }
+      throw new Error(`Gemini API error: ${errorMessage}`);
     }
 
     const data = await response.json();

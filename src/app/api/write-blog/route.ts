@@ -59,12 +59,19 @@ export async function POST(req: NextRequest) {
 
     // Generate blog post using Gemini
     console.log(`Generating blog post for topic: ${topic.title}`);
-    const blogPost = await generateBlogPost({
-      topic: topic.title,
-      keywords: topic.keywords || [],
-      researchNotes: topic.research_notes || undefined,
-      targetLength: 1500,
-    });
+    let blogPost;
+    try {
+      blogPost = await generateBlogPost({
+        topic: topic.title,
+        keywords: topic.keywords || [],
+        researchNotes: topic.research_notes || undefined,
+        targetLength: 1500,
+      });
+      console.log(`Successfully generated blog post: ${blogPost.title}`);
+    } catch (geminiError: any) {
+      console.error("Gemini API error details:", geminiError);
+      throw new Error(`Gemini API failed: ${geminiError.message}`);
+    }
 
     // Generate slug from title
     const slug = blogPost.title

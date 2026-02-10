@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { generateBlogPost } from "@/lib/gemini";
+import { commitBlogDirectly } from "@/lib/github";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -61,38 +63,159 @@ export async function GET(request: NextRequest) {
     }
 
     const topic = topics[0];
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                   process.env.AUTH_URL || 
-                   request.nextUrl.origin;
+    
+    // Update topic status to in_progress
+    await supabase
+      .from("blog_topics")
+      .update({ status: "in_progress" })
+      .eq("id", topic.id);
 
-    // Call the write-blog API endpoint
-    const writeResponse = await fetch(`${baseUrl}/api/write-blog`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Pass cron secret if set
-        ...(cronSecret ? { Authorization: `Bearer ${cronSecret}` } : {}),
-      },
-      body: JSON.stringify({
-        topicId: topic.id,
-        commitToGitHub: true, // Auto-commit to GitHub
-      }),
-    });
-
-    if (!writeResponse.ok) {
-      const error = await writeResponse.json().catch(() => ({ error: "Unknown error" }));
-      throw new Error(`Failed to write blog: ${error.error || writeResponse.statusText}`);
+    // Generate blog post using Gemini
+    console.log(`[Cron] Generating blog post for topic: ${topic.title}`);
+    let blogPost;
+    try {
+      blogPost = await generateBlogPost({
+        topic: topic.title,
+        keywords: topic.keywords || [],
+        researchNotes: topic.research_notes || undefined,
+        targetLength: 1500,
+      });
+      console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);
+    } catch (geminiError: any) {
+      console.error("[Cron] Gemini API error:", geminiError);
+      throw new Error(`Gemini API failed: ${geminiError.message}`);
     }
 
-    const result = await writeResponse.json();
+    // Generate slug from title
+    const slug = blogPost.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    // Check if draft with this slug already exists
+    const { data: existingDraft } = await supabase
+      .from("blog_drafts")
+      .select("id")
+      .eq("slug", slug)
+      .single();
+
+    let draftId: string;
+
+    if (existingDraft) {
+      // Update existing draft
+      const { data: updatedDraft, error: updateError } = await supabase
+        .from("blog_drafts")
+        .update({
+          title: blogPost.title,
+          body_mdx: blogPost.content,
+          meta_description: blogPost.metaDescription,
+          category: blogPost.category || "",
+          read_time: blogPost.readTime || "5 min read",
+          topic_id: topic.id,
+          status: "scheduled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingDraft.id)
+        .select()
+        .single();
+
+      if (updateError || !updatedDraft) {
+        throw new Error(`Failed to update draft: ${updateError?.message}`);
+      }
+      draftId = updatedDraft.id;
+    } else {
+      // Create new draft
+      const { data: newDraft, error: createError } = await supabase
+        .from("blog_drafts")
+        .insert({
+          title: blogPost.title,
+          slug,
+          body_mdx: blogPost.content,
+          meta_description: blogPost.metaDescription,
+          category: blogPost.category || "",
+          read_time: blogPost.readTime || "5 min read",
+          topic_id: topic.id,
+          status: "scheduled",
+        })
+        .select()
+        .single();
+
+      if (createError || !newDraft) {
+        throw new Error(`Failed to create draft: ${createError?.message}`);
+      }
+      draftId = newDraft.id;
+    }
+
+    // Commit directly to GitHub
+    let githubUrl: string | null = null;
+    try {
+      console.log(`[Cron] Committing to GitHub: ${slug}`);
+      // Build MDX content with frontmatter
+      const today = new Date().toISOString().split("T")[0];
+      const publishDate = new Date().toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      });
+
+      const frontmatter = [
+        "---",
+        `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
+        `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
+        `slug: "${slug}"`,
+        `category: "${blogPost.category || ""}"`,
+        `readTime: "${blogPost.readTime || "5 min read"}"`,
+        `publishDate: "${publishDate}"`,
+        `datePublished: "${today}"`,
+        `dateModified: "${today}"`,
+        "---",
+      ].join("\n");
+
+      const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
+
+      // Commit directly to main branch
+      const { commitUrl } = await commitBlogDirectly({
+        slug,
+        mdxContent,
+        title: blogPost.title,
+        commitMessage: `Auto-generated blog: ${blogPost.title}`,
+      });
+
+      githubUrl = commitUrl;
+      console.log(`[Cron] Successfully committed to GitHub: ${commitUrl}`);
+
+      // Update draft with GitHub URL
+      await supabase
+        .from("blog_drafts")
+        .update({
+          github_pr_url: commitUrl,
+          status: "published",
+          published_at: new Date().toISOString(),
+        })
+        .eq("id", draftId);
+
+      // Mark topic as completed
+      await supabase
+        .from("blog_topics")
+        .update({ status: "completed" })
+        .eq("id", topic.id);
+    } catch (githubError: any) {
+      console.error("[Cron] GitHub commit error:", githubError);
+      // Don't fail the whole request if GitHub fails, but log it
+    }
+
+    const result = {
+      draftId,
+      title: blogPost.title,
+      slug,
+      githubUrl,
+    };
 
     return NextResponse.json({
       success: true,
       message: `Successfully wrote blog post: ${result.title}`,
       processed: 1,
       topicId: topic.id,
-      draftId: result.draftId,
-      githubUrl: result.githubUrl,
+      ...result,
     });
   } catch (error: any) {
     console.error("Cron job error:", error);
