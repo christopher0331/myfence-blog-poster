@@ -79,3 +79,57 @@ export async function createBlogPR({
     prNumber: pr.number,
   };
 }
+
+/**
+ * Commits an MDX blog file directly to the main branch (no PR)
+ */
+export async function commitBlogDirectly({
+  slug,
+  mdxContent,
+  title,
+  commitMessage,
+}: PublishBlogParams): Promise<{ commitUrl: string; sha: string }> {
+  const octokit = getOctokit();
+  const { owner, repo, defaultBranch } = getRepoInfo();
+
+  const filePath = `src/content/blog/${slug}.mdx`;
+  const message = commitMessage || `Add blog post: ${title}`;
+
+  // Get the current SHA of the file (if it exists)
+  let currentSha: string | undefined;
+  try {
+    const { data: fileData } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: filePath,
+      ref: defaultBranch,
+    });
+    if (Array.isArray(fileData)) {
+      throw new Error("Path is a directory, not a file");
+    }
+    currentSha = fileData.sha;
+  } catch (error: any) {
+    // File doesn't exist yet, that's fine
+    if (error.status !== 404) {
+      throw error;
+    }
+  }
+
+  // Commit directly to main branch
+  const { data: commit } = await octokit.rest.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path: filePath,
+    message,
+    content: Buffer.from(mdxContent).toString("base64"),
+    branch: defaultBranch,
+    sha: currentSha, // If file exists, update it; otherwise create new
+  });
+
+  const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit.commit.sha}`;
+
+  return {
+    commitUrl,
+    sha: commit.commit.sha,
+  };
+}

@@ -4,3 +4,8 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# Scheduled function for automated blog writing
+# Note: Netlify scheduled functions require a separate function file
+# For Next.js, we'll use an external cron service or Netlify's scheduled functions feature
+# You can set this up in Netlify Dashboard → Functions → Scheduled Functions
