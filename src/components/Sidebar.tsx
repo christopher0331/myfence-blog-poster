@@ -4,24 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
   FileText,
   Lightbulb,
   Calendar,
-  Send,
-  Gauge,
-  Settings,
   LogOut,
 } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/posts", label: "Blog Posts", icon: FileText },
-  { href: "/topics", label: "Topics", icon: Lightbulb },
-  { href: "/schedule", label: "Schedule", icon: Calendar },
-  { href: "/publish", label: "Publish Queue", icon: Send },
-  { href: "/lighthouse", label: "Lighthouse", icon: Gauge },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Scheduled Posts", icon: Calendar },
+  { href: "/posts", label: "All Posts", icon: FileText },
+  { href: "/topics", label: "Research Topics", icon: Lightbulb },
 ];
 
 export default function Sidebar() {

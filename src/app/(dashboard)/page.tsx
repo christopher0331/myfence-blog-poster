@@ -1,47 +1,45 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Lightbulb, Calendar, Send } from "lucide-react";
+import { Calendar, Clock, Image as ImageIcon, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
-
-interface DashboardStats {
-  totalDrafts: number;
-  totalTopics: number;
-  scheduledPosts: number;
-  publishedPosts: number;
-}
+import type { BlogDraft } from "@/lib/types";
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalDrafts: 0,
-    totalTopics: 0,
-    scheduledPosts: 0,
-    publishedPosts: 0,
-  });
-  const [recentDrafts, setRecentDrafts] = useState<any[]>([]);
+  const router = useRouter();
+  const [scheduled, setScheduled] = useState<BlogDraft[]>([]);
+  const [upcoming, setUpcoming] = useState<BlogDraft[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [draftsRes, topicsRes, scheduledRes, publishedRes, recentRes] =
-          await Promise.all([
-            supabase.from("blog_drafts").select("id", { count: "exact", head: true }),
-            supabase.from("blog_topics").select("id", { count: "exact", head: true }),
-            supabase.from("blog_drafts").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
-            supabase.from("blog_drafts").select("id", { count: "exact", head: true }).eq("status", "published"),
-            supabase.from("blog_drafts").select("*").order("updated_at", { ascending: false }).limit(5),
-          ]);
+        const now = new Date().toISOString();
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        setStats({
-          totalDrafts: draftsRes.count || 0,
-          totalTopics: topicsRes.count || 0,
-          scheduledPosts: scheduledRes.count || 0,
-          publishedPosts: publishedRes.count || 0,
-        });
-        setRecentDrafts(recentRes.data || []);
+        // Get scheduled posts
+        const { data: scheduledData } = await supabase
+          .from("blog_drafts")
+          .select("*")
+          .eq("status", "scheduled")
+          .not("scheduled_date", "is", null)
+          .order("scheduled_date", { ascending: true });
+
+        // Get upcoming posts (next 7 days)
+        const { data: upcomingData } = await supabase
+          .from("blog_drafts")
+          .select("*")
+          .eq("status", "scheduled")
+          .gte("scheduled_date", now)
+          .lte("scheduled_date", nextWeek)
+          .order("scheduled_date", { ascending: true });
+
+        setScheduled((scheduledData || []) as BlogDraft[]);
+        setUpcoming((upcomingData || []) as BlogDraft[]);
       } catch (err) {
         console.error("Failed to load dashboard:", err);
       } finally {
@@ -52,92 +50,220 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
-  const statCards = [
-    { label: "Total Drafts", value: stats.totalDrafts, icon: FileText, color: "text-blue-600" },
-    { label: "Topics", value: stats.totalTopics, icon: Lightbulb, color: "text-yellow-600" },
-    { label: "Scheduled", value: stats.scheduledPosts, icon: Calendar, color: "text-purple-600" },
-    { label: "Published", value: stats.publishedPosts, icon: Send, color: "text-green-600" },
-  ];
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  const formatTime = (dateString: string | null) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const getDaysUntil = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Blog content management overview
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Scheduled Posts</h1>
+          <p className="text-muted-foreground mt-1">
+            View and manage your upcoming blog content
+          </p>
+        </div>
+        <Button onClick={() => router.push("/posts")}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Post
+        </Button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  <p className="text-3xl font-bold mt-1">
-                    {loading ? "—" : stat.value}
-                  </p>
-                </div>
-                <stat.icon className={`h-8 w-8 ${stat.color} opacity-80`} />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Recent Drafts */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Drafts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-muted-foreground">Loading...</p>
-          ) : recentDrafts.length === 0 ? (
-            <p className="text-muted-foreground">
-              No drafts yet. Create your first blog post from the{" "}
-              <a href="/posts" className="text-primary hover:underline">
-                Blog Posts
-              </a>{" "}
-              page.
+      {loading ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Loading scheduled posts...</p>
+        </div>
+      ) : scheduled.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Calendar className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No scheduled posts</h3>
+            <p className="text-muted-foreground mb-4">
+              Schedule posts to see them here. Posts are automatically written by AI based on your research topics.
             </p>
-          ) : (
-            <div className="space-y-3">
-              {recentDrafts.map((draft: any) => (
-                <div
-                  key={draft.id}
-                  className="flex items-center justify-between p-3 rounded-lg border"
-                >
-                  <div className="flex-1 min-w-0">
-                    <a
-                      href={`/posts/${draft.id}`}
-                      className="font-medium hover:text-primary transition-colors truncate block"
+            <div className="flex gap-2 justify-center">
+              <Button onClick={() => router.push("/topics")} variant="outline">
+                Manage Topics
+              </Button>
+              <Button onClick={() => router.push("/posts")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Post
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Upcoming (Next 7 Days) */}
+          {upcoming.length > 0 && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Upcoming This Week</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {upcoming.map((post) => {
+                  const daysUntil = getDaysUntil(post.scheduled_date);
+                  return (
+                    <Card
+                      key={post.id}
+                      className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
+                      onClick={() => router.push(`/posts/${post.id}`)}
                     >
-                      {draft.title || "Untitled"}
-                    </a>
-                    <p className="text-sm text-muted-foreground truncate">
-                      /blog/{draft.slug || "—"}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={
-                      draft.status === "published"
-                        ? "success"
-                        : draft.status === "scheduled"
-                        ? "warning"
-                        : "secondary"
-                    }
-                  >
-                    {draft.status}
-                  </Badge>
-                </div>
-              ))}
+                      <CardContent className="p-0">
+                        {post.featured_image ? (
+                          <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={post.featured_image}
+                              alt={post.title || "Post image"}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-48 w-full bg-muted flex items-center justify-center rounded-t-lg">
+                            <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
+                          </div>
+                        )}
+                        <div className="p-5 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-semibold text-lg line-clamp-2 flex-1">
+                              {post.title || "Untitled Post"}
+                            </h3>
+                            {daysUntil !== null && daysUntil >= 0 && (
+                              <Badge variant={daysUntil <= 1 ? "warning" : "secondary"}>
+                                {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil}d`}
+                              </Badge>
+                            )}
+                          </div>
+                          {post.meta_description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2">
+                              {post.meta_description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>{formatDate(post.scheduled_date)}</span>
+                            </div>
+                            {post.read_time && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{post.read_time}</span>
+                              </div>
+                            )}
+                          </div>
+                          {post.category && (
+                            <Badge variant="outline" className="text-xs">
+                              {post.category}
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {/* All Scheduled Posts */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">
+              All Scheduled Posts ({scheduled.length})
+            </h2>
+            <div className="space-y-3">
+              {scheduled.map((post) => {
+                const daysUntil = getDaysUntil(post.scheduled_date);
+                return (
+                  <Card
+                    key={post.id}
+                    className="cursor-pointer hover:shadow-md transition-all"
+                    onClick={() => router.push(`/posts/${post.id}`)}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-4">
+                        {post.featured_image ? (
+                          <div className="relative w-32 h-24 flex-shrink-0 rounded-lg overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={post.featured_image}
+                              alt={post.title || "Post image"}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-32 h-24 flex-shrink-0 bg-muted rounded-lg flex items-center justify-center">
+                            <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-lg truncate">
+                                {post.title || "Untitled Post"}
+                              </h3>
+                              {post.meta_description && (
+                                <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
+                                  {post.meta_description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {daysUntil !== null && daysUntil >= 0 && (
+                                <Badge variant={daysUntil <= 1 ? "warning" : "secondary"}>
+                                  {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil}d`}
+                                </Badge>
+                              )}
+                              <Badge variant="outline">
+                                {formatDate(post.scheduled_date)}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            {post.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {post.category}
+                              </Badge>
+                            )}
+                            {post.read_time && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{post.read_time}</span>
+                              </div>
+                            )}
+                            <span className="text-xs">/blog/{post.slug}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
