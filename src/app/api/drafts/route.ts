@@ -16,6 +16,20 @@ function getAdminClient() {
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify environment variables first
+    if (!supabaseUrl) {
+      return NextResponse.json(
+        { error: "NEXT_PUBLIC_SUPABASE_URL is not set" },
+        { status: 500 }
+      );
+    }
+    if (!supabaseServiceKey) {
+      return NextResponse.json(
+        { error: "SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY is not set" },
+        { status: 500 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const scheduledDateGte = searchParams.get("scheduled_date_gte");
