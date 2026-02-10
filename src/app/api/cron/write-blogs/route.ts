@@ -64,16 +64,32 @@ export async function GET(request: NextRequest) {
 
     const topic = topics[0];
     
-    // Update topic status to in_progress
+    // Update topic status to in_progress with initial progress
     await supabase
       .from("blog_topics")
-      .update({ status: "in_progress" })
+      .update({ 
+        status: "in_progress",
+        progress_status: "Starting research and content generation..."
+      })
       .eq("id", topic.id);
 
     // Generate blog post using Gemini
     console.log(`[Cron] Generating blog post for topic: ${topic.title}`);
+    
+    // Update progress: Researching
+    await supabase
+      .from("blog_topics")
+      .update({ progress_status: "Researching topic and gathering information..." })
+      .eq("id", topic.id);
+    
     let blogPost;
     try {
+      // Update progress: Generating content
+      await supabase
+        .from("blog_topics")
+        .update({ progress_status: "Generating blog content with AI..." })
+        .eq("id", topic.id);
+      
       blogPost = await generateBlogPost({
         topic: topic.title,
         keywords: topic.keywords || [],
@@ -81,6 +97,12 @@ export async function GET(request: NextRequest) {
         targetLength: 1500,
       });
       console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);
+      
+      // Update progress: Saving draft
+      await supabase
+        .from("blog_topics")
+        .update({ progress_status: "Saving draft to database..." })
+        .eq("id", topic.id);
     } catch (geminiError: any) {
       console.error("[Cron] Gemini API error:", geminiError);
       throw new Error(`Gemini API failed: ${geminiError.message}`);
@@ -149,6 +171,12 @@ export async function GET(request: NextRequest) {
     // Commit directly to GitHub
     let githubUrl: string | null = null;
     try {
+      // Update progress: Committing to GitHub
+      await supabase
+        .from("blog_topics")
+        .update({ progress_status: "Committing to GitHub repository..." })
+        .eq("id", topic.id);
+      
       console.log(`[Cron] Committing to GitHub: ${slug}`);
       // Build MDX content with frontmatter
       const today = new Date().toISOString().split("T")[0];
@@ -196,10 +224,21 @@ export async function GET(request: NextRequest) {
       // Mark topic as completed
       await supabase
         .from("blog_topics")
-        .update({ status: "completed" })
+        .update({ 
+          status: "completed",
+          progress_status: "✓ Blog post successfully created and published!"
+        })
         .eq("id", topic.id);
     } catch (githubError: any) {
       console.error("[Cron] GitHub commit error:", githubError);
+      // Update progress with error but mark as completed since draft was created
+      await supabase
+        .from("blog_topics")
+        .update({ 
+          status: "completed",
+          progress_status: "✓ Draft created, but GitHub commit failed. Check logs."
+        })
+        .eq("id", topic.id);
       // Don't fail the whole request if GitHub fails, but log it
     }
 
@@ -219,6 +258,22 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Cron job error:", error);
+    
+    // If we have a topic ID, update its status to show the error
+    if (topics && topics.length > 0) {
+      try {
+        await getAdminClient()
+          .from("blog_topics")
+          .update({ 
+            status: "approved", // Reset to approved so it can be retried
+            progress_status: `❌ Error: ${error.message || "Failed to process"}` 
+          })
+          .eq("id", topics[0].id);
+      } catch (updateError) {
+        console.error("Failed to update topic error status:", updateError);
+      }
+    }
+    
     return NextResponse.json(
       {
         success: false,

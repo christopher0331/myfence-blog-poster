@@ -9,6 +9,7 @@ export interface BlogTopic {
   status: TopicStatus;
   keywords: string[];
   research_notes: string | null;
+  progress_status: string | null;
   priority: number;
   created_at: string;
   updated_at: string;

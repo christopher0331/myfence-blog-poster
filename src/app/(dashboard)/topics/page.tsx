@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Lightbulb, Trash2, Sparkles, CheckCircle2 } from "lucide-react";
+import { Plus, Lightbulb, Trash2, Sparkles, CheckCircle2, Loader2 } from "lucide-react";
 import { topicsApi } from "@/lib/api";
 import type { BlogTopic, TopicStatus } from "@/lib/types";
 
@@ -60,6 +60,18 @@ export default function TopicsPage() {
   useEffect(() => {
     loadTopics();
   }, [loadTopics]);
+
+  // Auto-refresh topics that are in progress
+  useEffect(() => {
+    const hasInProgress = topics.some(t => t.status === "in_progress");
+    if (!hasInProgress) return;
+
+    const interval = setInterval(() => {
+      loadTopics();
+    }, 3000); // Refresh every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [topics, loadTopics]);
 
   function resetForm() {
     setForm({ title: "", keywords: "", research_notes: "", priority: 5, source: "user" });
@@ -316,7 +328,17 @@ export default function TopicsPage() {
                             </button>
                           </div>
                         </div>
-                        {topic.research_notes && (
+                        {topic.status === "in_progress" && topic.progress_status && (
+                          <div className="mb-3 p-2 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 rounded-md">
+                            <div className="flex items-start gap-2">
+                              <Loader2 className="h-3 w-3 mt-0.5 text-yellow-600 dark:text-yellow-400 animate-spin flex-shrink-0" />
+                              <p className="text-xs text-yellow-800 dark:text-yellow-300 leading-relaxed">
+                                {topic.progress_status}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {topic.research_notes && topic.status !== "in_progress" && (
                           <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
                             {topic.research_notes}
                           </p>
