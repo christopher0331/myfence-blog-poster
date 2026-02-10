@@ -101,14 +101,35 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const client = getAdminClient();
 
-    const { data, error } = await client.from("blog_drafts").insert(body).select().single();
+    // Ensure body_mdx has a default value if not provided (required by schema)
+    const draftData = {
+      ...body,
+      body_mdx: body.body_mdx || "",
+    };
+
+    const { data, error } = await client.from("blog_drafts").insert(draftData).select().single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("Supabase insert error:", error);
+      return NextResponse.json(
+        { 
+          error: error.message,
+          details: error.details || null,
+          hint: error.hint || null
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ data });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("API route error:", error);
+    return NextResponse.json(
+      { 
+        error: error.message || "Internal server error",
+        type: error.constructor.name
+      },
+      { status: 500 }
+    );
   }
 }
