@@ -137,6 +137,7 @@ Start writing now:`;
     throw lastError || new Error("All Gemini API endpoints failed");
   }
 
+  try {
     const data = await response.json();
 
     if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
