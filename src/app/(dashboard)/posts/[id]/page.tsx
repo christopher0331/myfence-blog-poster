@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CompletenessTracker from "@/components/editor/CompletenessTracker";
 import MDXPreview from "@/components/editor/MDXPreview";
-import { supabase } from "@/lib/supabase";
+import { draftsApi } from "@/lib/api";
 import { ArrowLeft, Save, Send, Trash2, Calendar } from "lucide-react";
 import type { BlogDraft, DraftStatus } from "@/lib/types";
 
@@ -40,17 +40,13 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
 
   useEffect(() => {
     async function load() {
-      const { data, error } = await supabase
-        .from("blog_drafts")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error || !data) {
+      try {
+        const data = await draftsApi.getById(id);
+        setDraft(data);
+      } catch (err) {
+        console.error("Failed to load draft:", err);
         router.push("/posts");
-        return;
       }
-      setDraft(data as BlogDraft);
     }
     load();
   }, [id, router]);
@@ -90,10 +86,9 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     if (!draft) return;
     setSaving(true);
 
-    const completeness = calculateCompleteness(draft);
-    const { error } = await supabase
-      .from("blog_drafts")
-      .update({
+    try {
+      const completeness = calculateCompleteness(draft);
+      await draftsApi.update(draft.id, {
         title: draft.title,
         slug: draft.slug,
         meta_description: draft.meta_description,
@@ -104,19 +99,23 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         status: draft.status,
         scheduled_date: draft.scheduled_date,
         completeness,
-      })
-      .eq("id", draft.id);
-
-    if (!error) {
+      });
       setLastSaved(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }, [draft, calculateCompleteness]);
 
   const deleteDraft = useCallback(async () => {
     if (!draft || !confirm("Are you sure you want to delete this post?")) return;
-    await supabase.from("blog_drafts").delete().eq("id", draft.id);
-    router.push("/posts");
+    try {
+      await draftsApi.delete(draft.id);
+      router.push("/posts");
+    } catch (err) {
+      console.error("Failed to delete draft:", err);
+    }
   }, [draft, router]);
 
   // Auto-save on Ctrl+S

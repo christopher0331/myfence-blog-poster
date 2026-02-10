@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Image as ImageIcon, Calendar, Clock, FileText } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { draftsApi } from "@/lib/api";
 import type { BlogDraft } from "@/lib/types";
 
 export default function PostsPage() {
@@ -21,29 +21,29 @@ export default function PostsPage() {
   }, []);
 
   async function loadDrafts() {
-    const { data, error } = await supabase
-      .from("blog_drafts")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
-    if (!error && data) setDrafts(data as BlogDraft[]);
-    setLoading(false);
+    try {
+      const data = await draftsApi.getAll({
+        order: "updated_at",
+        ascending: false,
+      });
+      setDrafts(data);
+    } catch (err) {
+      console.error("Failed to load drafts:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function createNewDraft() {
-    const slug = `new-post-${Date.now()}`;
-    const { data, error } = await supabase
-      .from("blog_drafts")
-      .insert({
-        slug,
+    try {
+      const data = await draftsApi.create({
+        slug: `new-post-${Date.now()}`,
         title: "",
         status: "draft",
-      })
-      .select()
-      .single();
-
-    if (!error && data) {
+      });
       router.push(`/posts/${data.id}`);
+    } catch (err) {
+      console.error("Failed to create draft:", err);
     }
   }
 

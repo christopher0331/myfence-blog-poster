@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Lightbulb, Trash2, Sparkles, CheckCircle2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { topicsApi } from "@/lib/api";
 import type { BlogTopic, TopicStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: TopicStatus; label: string; description: string }[] = [
@@ -42,14 +42,19 @@ export default function TopicsPage() {
   });
 
   const loadTopics = useCallback(async () => {
-    const { data } = await supabase
-      .from("blog_topics")
-      .select("*")
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    setTopics((data || []) as BlogTopic[]);
-    setLoading(false);
+    try {
+      const data = await topicsApi.getAll({
+        order: "priority",
+        ascending: false,
+      });
+      // Sort by created_at as secondary sort
+      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setTopics(data);
+    } catch (err) {
+      console.error("Failed to load topics:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -65,37 +70,49 @@ export default function TopicsPage() {
   async function saveTopic() {
     if (!form.title.trim()) return;
 
-    const payload = {
-      title: form.title,
-      keywords: form.keywords
-        .split(",")
-        .map((k) => k.trim())
-        .filter(Boolean),
-      research_notes: form.research_notes || null,
-      priority: form.priority,
-      source: form.source,
-      status: editingId ? undefined : "suggested" as TopicStatus,
-    };
+    try {
+      const payload = {
+        title: form.title,
+        keywords: form.keywords
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean),
+        research_notes: form.research_notes || null,
+        priority: form.priority,
+        source: form.source,
+        ...(editingId ? {} : { status: "suggested" as TopicStatus }),
+      };
 
-    if (editingId) {
-      await supabase.from("blog_topics").update(payload).eq("id", editingId);
-    } else {
-      await supabase.from("blog_topics").insert(payload);
+      if (editingId) {
+        await topicsApi.update(editingId, payload);
+      } else {
+        await topicsApi.create(payload);
+      }
+
+      resetForm();
+      loadTopics();
+    } catch (err) {
+      console.error("Failed to save topic:", err);
     }
-
-    resetForm();
-    loadTopics();
   }
 
   async function updateStatus(id: string, status: TopicStatus) {
-    await supabase.from("blog_topics").update({ status }).eq("id", id);
-    loadTopics();
+    try {
+      await topicsApi.update(id, { status });
+      loadTopics();
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    }
   }
 
   async function deleteTopic(id: string) {
     if (!confirm("Delete this topic?")) return;
-    await supabase.from("blog_topics").delete().eq("id", id);
-    loadTopics();
+    try {
+      await topicsApi.delete(id);
+      loadTopics();
+    } catch (err) {
+      console.error("Failed to delete topic:", err);
+    }
   }
 
   function startEdit(topic: BlogTopic) {

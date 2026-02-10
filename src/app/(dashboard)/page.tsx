@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, Image as ImageIcon, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
+import { draftsApi } from "@/lib/api";
 import type { BlogDraft } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -22,24 +22,24 @@ export default function DashboardPage() {
         const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
         // Get scheduled posts
-        const { data: scheduledData } = await supabase
-          .from("blog_drafts")
-          .select("*")
-          .eq("status", "scheduled")
-          .not("scheduled_date", "is", null)
-          .order("scheduled_date", { ascending: true });
+        const scheduledData = await draftsApi.getAll({
+          status: "scheduled",
+          scheduledDateNotNull: true,
+          order: "scheduled_date",
+          ascending: true,
+        });
 
         // Get upcoming posts (next 7 days)
-        const { data: upcomingData } = await supabase
-          .from("blog_drafts")
-          .select("*")
-          .eq("status", "scheduled")
-          .gte("scheduled_date", now)
-          .lte("scheduled_date", nextWeek)
-          .order("scheduled_date", { ascending: true });
+        const upcomingData = await draftsApi.getAll({
+          status: "scheduled",
+          scheduledDateGte: now,
+          scheduledDateLte: nextWeek,
+          order: "scheduled_date",
+          ascending: true,
+        });
 
-        setScheduled((scheduledData || []) as BlogDraft[]);
-        setUpcoming((upcomingData || []) as BlogDraft[]);
+        setScheduled(scheduledData);
+        setUpcoming(upcomingData);
       } catch (err) {
         console.error("Failed to load dashboard:", err);
       } finally {
