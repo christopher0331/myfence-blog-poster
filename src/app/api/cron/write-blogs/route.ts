@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let topicId: string | null = null;
+  
   try {
     const supabase = getAdminClient();
 
@@ -63,6 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     const topic = topics[0];
+    topicId = topic.id;
     
     // Update topic status to in_progress with initial progress
     await supabase
@@ -260,7 +263,7 @@ export async function GET(request: NextRequest) {
     console.error("Cron job error:", error);
     
     // If we have a topic ID, update its status to show the error
-    if (topics && topics.length > 0) {
+    if (topicId) {
       try {
         await getAdminClient()
           .from("blog_topics")
@@ -268,7 +271,7 @@ export async function GET(request: NextRequest) {
             status: "approved", // Reset to approved so it can be retried
             progress_status: `❌ Error: ${error.message || "Failed to process"}` 
           })
-          .eq("id", topics[0].id);
+          .eq("id", topicId);
       } catch (updateError) {
         console.error("Failed to update topic error status:", updateError);
       }
