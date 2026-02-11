@@ -63,10 +63,11 @@ CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, profession
    | Cost | $X | $Y |
    - Tables will render in a polished Card with proper styling
 
-3. CALLOUT BOXES:
+3. CALLOUT BOXES - Use ONLY the exact component name <Callout>:
    - Use <Callout title="Real-world failure">...explanation...</Callout> for warnings or key takeaways
    - Use <Callout title="Pro tip" variant="success">...tip...</Callout> for positive tips
    - Use <Callout title="Important" variant="info">...info...</Callout> for general notes
+   - NEVER use ProTip, ProTtip, or any other name - only <Callout>
    - Place callouts after relevant paragraphs or image descriptions
 
 4. IMAGES:
