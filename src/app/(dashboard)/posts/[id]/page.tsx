@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import CompletenessTracker from "@/components/editor/CompletenessTracker";
 import MDXPreview from "@/components/editor/MDXPreview";
 import { draftsApi } from "@/lib/api";
-import { ArrowLeft, Save, Send, Trash2, Calendar } from "lucide-react";
+import { ArrowLeft, Save, Send, Trash2, Calendar, Github } from "lucide-react";
 import type { BlogDraft, DraftStatus } from "@/lib/types";
 
 const CATEGORIES = [
@@ -37,6 +37,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
   const [draft, setDraft] = useState<BlogDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -118,6 +119,40 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     }
   }, [draft, router]);
 
+  const publishToGitHub = useCallback(async () => {
+    if (!draft) return;
+    if (!draft.title || !draft.body_mdx) {
+      alert("Please add a title and content before publishing to GitHub.");
+      return;
+    }
+    
+    setPublishing(true);
+    try {
+      const response = await fetch("/api/test-github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId: draft.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to publish to GitHub");
+      }
+
+      // Reload draft to get updated GitHub URL
+      const updated = await draftsApi.getById(draft.id);
+      setDraft(updated);
+
+      alert(`Successfully published to GitHub!\n\nCommit: ${data.commitUrl}`);
+    } catch (err: any) {
+      console.error("Failed to publish to GitHub:", err);
+      alert(`Failed to publish to GitHub: ${err.message}\n\nCheck Netlify logs for details.`);
+    } finally {
+      setPublishing(false);
+    }
+  }, [draft]);
+
   // Auto-save on Ctrl+S
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -198,6 +233,14 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
           >
             <Send className="h-4 w-4 mr-2" />
             Submit for Review
+          </Button>
+          <Button
+            onClick={publishToGitHub}
+            disabled={publishing || !draft.title || !draft.body_mdx}
+            variant="default"
+          >
+            <Github className="h-4 w-4 mr-2" />
+            {publishing ? "Publishing..." : "Publish to GitHub"}
           </Button>
         </div>
       </div>
