@@ -98,6 +98,12 @@ export async function POST(req: NextRequest) {
           meta_description: blogPost.metaDescription,
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
+          featured_image: (blogPost as any).featuredImage || null,
+          structured_data: {
+            imageCaption: (blogPost as any).imageCaption,
+            layout: (blogPost as any).layout,
+            showArticleSummary: (blogPost as any).showArticleSummary,
+          },
           topic_id: topicId,
           status: commitToGitHub ? "scheduled" : "draft",
           updated_at: new Date().toISOString(),
@@ -121,6 +127,12 @@ export async function POST(req: NextRequest) {
           meta_description: blogPost.metaDescription,
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
+          featured_image: (blogPost as any).featuredImage || null,
+          structured_data: {
+            imageCaption: (blogPost as any).imageCaption,
+            layout: (blogPost as any).layout,
+            showArticleSummary: (blogPost as any).showArticleSummary,
+          },
           topic_id: topicId,
           status: commitToGitHub ? "scheduled" : "draft",
         })
@@ -144,18 +156,23 @@ export async function POST(req: NextRequest) {
           year: "numeric",
         });
 
-        const frontmatter = [
+        const bp = blogPost as any;
+        const frontmatterLines = [
           "---",
           `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
           `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
           `slug: "${slug}"`,
           `category: "${blogPost.category || ""}"`,
+          `image: "${bp.featuredImage || ""}"`,
           `readTime: "${blogPost.readTime || "5 min read"}"`,
           `publishDate: "${publishDate}"`,
           `datePublished: "${today}"`,
           `dateModified: "${today}"`,
-          "---",
-        ].join("\n");
+          bp.imageCaption ? `imageCaption: "${String(bp.imageCaption).replace(/"/g, '\\"')}"` : null,
+          bp.layout ? `layout: "${bp.layout}"` : null,
+          bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
+        ].filter(Boolean);
+        const frontmatter = frontmatterLines.join("\n");
 
         const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
 

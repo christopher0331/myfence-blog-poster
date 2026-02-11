@@ -15,6 +15,10 @@ interface GeminiBlogResponse {
   metaDescription: string;
   category?: string;
   readTime?: string;
+  featuredImage?: string; // URL or path for hero image
+  imageCaption?: string; // e.g. "Image courtesy of Barrier Boss USA"
+  layout?: "centered" | "two-column";
+  showArticleSummary?: boolean;
 }
 
 /**
@@ -37,33 +41,66 @@ export async function generateBlogPost({
     ? `\n\nAdditional research context:\n${researchNotes}`
     : "";
 
-  const prompt = `You are an expert blog writer specializing in fence installation, maintenance, and related topics for homeowners and contractors.
+  const prompt = `You are an expert blog writer specializing in fence installation, maintenance, and related topics for homeowners and contractors in the Seattle/Pacific Northwest area.
 
 Write a comprehensive, SEO-optimized blog post about: ${topic}
 
 Keywords to focus on: ${keywordsList}${researchContext}
 
-Requirements:
-- Write in Markdown/MDX format
-- Target approximately ${targetLength} words
-- Include a compelling title
-- Write engaging, informative content with proper headings (##, ###)
-- Include practical tips and actionable advice
-- Use a friendly, professional tone
-- Include a meta description (120-160 characters) for SEO
-- Suggest a relevant category (e.g., "Pricing", "Materials", "Legal", "Maintenance", "Installation", "DIY", "Design")
-- Estimate read time (e.g., "5 min read")
+CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, professional output:
 
-Format your response as JSON with the following structure:
+1. CONTENT STRUCTURE:
+   - Use ## for main sections (e.g., "The Foundation of Your Fence Investment")
+   - Use ### for sub-sections
+   - Bold key terms and phrases within paragraphs (e.g., **fencing installation**, **Enhanced Privacy**)
+   - Use numbered lists for steps or sequential info (1., 2., 3.)
+   - Use bullet lists for feature lists or options
+
+2. COMPARISON TABLES:
+   - When comparing two or more options (e.g., steel vs wood, options A vs B), include a markdown table:
+   | Feature | Option A | Option B |
+   |---------|----------|----------|
+   | Cost | $X | $Y |
+   - Tables will render in a polished Card with proper styling
+
+3. CALLOUT BOXES:
+   - Use <Callout title="Real-world failure">...explanation...</Callout> for warnings or key takeaways
+   - Use <Callout title="Pro tip" variant="success">...tip...</Callout> for positive tips
+   - Use <Callout title="Important" variant="info">...info...</Callout> for general notes
+   - Place callouts after relevant paragraphs or image descriptions
+
+4. IMAGES:
+   - Use standard markdown: ![Alt text describing image](https://example.com/image.jpg)
+   - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line (authors can add ImageGrid manually if needed)
+   - Suggest a featured_image URL if relevant (e.g., product photo, hero image). Use a placeholder like "/images/hero-placeholder.jpg" if no specific image
+
+5. IMAGE CAPTIONS:
+   - If using a product or vendor image, suggest imageCaption: "Image courtesy of [Vendor Name]" with optional link
+
+6. LAYOUT:
+   - Use layout: "centered" for comparison/guide posts (title centered, hero image below, Article Summary box)
+   - Use layout: "two-column" for how-to or narrative posts (title + image side-by-side)
+   - Set showArticleSummary: true for longer posts (1000+ words) to enable AI summary CTA
+
+7. METADATA:
+   - category: One of "Pricing", "Materials", "Legal", "Maintenance", "Installation", "Fence Posts", "DIY", "Design"
+   - readTime: Estimate based on word count (e.g., "8 min read")
+   - metaDescription: 120-160 characters, SEO-optimized
+
+Format your response as JSON:
 {
   "title": "Blog post title",
-  "content": "Full MDX content with markdown formatting",
+  "content": "Full MDX content with markdown tables, Callout components, proper headings, and bolded key terms",
   "metaDescription": "SEO meta description",
-  "category": "Suggested category",
-  "readTime": "X min read"
+  "category": "Category name",
+  "readTime": "X min read",
+  "featuredImage": "/path/or/url or empty string",
+  "imageCaption": "Image courtesy of Vendor" or empty string,
+  "layout": "centered" or "two-column",
+  "showArticleSummary": true or false
 }
 
-Start writing now:`;
+Start writing now. Output valid JSON only.`;
 
   // Determine which model to use
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -163,6 +200,10 @@ Start writing now:`;
         metaDescription: parsed.metaDescription || `Learn about ${topic.toLowerCase()}`,
         category: parsed.category,
         readTime: parsed.readTime || "5 min read",
+        featuredImage: parsed.featuredImage,
+        imageCaption: parsed.imageCaption,
+        layout: parsed.layout,
+        showArticleSummary: parsed.showArticleSummary,
       };
     } catch (parseError) {
       // If JSON parsing fails, extract title and use full text as content

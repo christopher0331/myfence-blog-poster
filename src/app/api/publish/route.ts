@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
       year: "numeric",
     });
 
-    const frontmatter = [
+    const sd = (draft.structured_data || {}) as Record<string, unknown>;
+    const frontmatterLines = [
       "---",
       `title: "${draft.title.replace(/"/g, '\\"')}"`,
       `description: "${(draft.meta_description || "").replace(/"/g, '\\"')}"`,
@@ -67,13 +68,12 @@ export async function POST(req: NextRequest) {
       `publishDate: "${publishDate}"`,
       `datePublished: "${today}"`,
       `dateModified: "${today}"`,
-      draft.structured_data
-        ? `keywords: "${(draft.structured_data as any).keywords || ""}"`
-        : null,
-      "---",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      sd.keywords ? `keywords: "${String(sd.keywords).replace(/"/g, '\\"')}"` : null,
+      sd.imageCaption ? `imageCaption: "${String(sd.imageCaption).replace(/"/g, '\\"')}"` : null,
+      sd.layout ? `layout: "${sd.layout}"` : null,
+      sd.showArticleSummary !== undefined ? `showArticleSummary: ${sd.showArticleSummary}` : null,
+    ].filter(Boolean);
+    const frontmatter = frontmatterLines.join("\n");
 
     const mdxContent = `${frontmatter}\n\n${draft.body_mdx}`;
 
