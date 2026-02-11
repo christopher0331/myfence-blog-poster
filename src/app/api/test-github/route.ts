@@ -85,25 +85,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build MDX content with frontmatter
+    // Build MDX content with frontmatter (matching src/content/blog/*.mdx format)
     const today = new Date().toISOString().split("T")[0];
     const publishDate = new Date().toLocaleDateString("en-US", {
       month: "long",
       year: "numeric",
     });
 
-    const frontmatter = [
+    // Get keywords from topic if available
+    let keywords: string | undefined;
+    if (draft.topic_id) {
+      const { data: topic } = await supabase
+        .from("blog_topics")
+        .select("keywords")
+        .eq("id", draft.topic_id)
+        .single();
+      
+      if (topic?.keywords && topic.keywords.length > 0) {
+        keywords = topic.keywords.join(", ");
+      }
+    }
+
+    const frontmatterLines = [
       "---",
       `title: "${draft.title.replace(/"/g, '\\"')}"`,
       `description: "${(draft.meta_description || "").replace(/"/g, '\\"')}"`,
       `slug: "${draft.slug}"`,
       `category: "${draft.category || ""}"`,
+    ];
+
+    // Add image only if it exists
+    if (draft.featured_image) {
+      frontmatterLines.push(`image: "${draft.featured_image.replace(/"/g, '\\"')}"`);
+    }
+
+    frontmatterLines.push(
       `readTime: "${draft.read_time || "5 min read"}"`,
       `publishDate: "${publishDate}"`,
       `datePublished: "${today}"`,
-      `dateModified: "${today}"`,
-      "---",
-    ].join("\n");
+      `dateModified: "${today}"`
+    );
+
+    // Add keywords only if they exist
+    if (keywords) {
+      frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
+    }
+
+    frontmatterLines.push("---");
+    const frontmatter = frontmatterLines.join("\n");
 
     const mdxContent = `${frontmatter}\n\n${draft.body_mdx}`;
 

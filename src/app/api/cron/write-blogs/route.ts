@@ -181,25 +181,54 @@ export async function GET(request: NextRequest) {
         .eq("id", topic.id);
       
       console.log(`[Cron] Committing to GitHub: ${slug}`);
-      // Build MDX content with frontmatter
+      // Build MDX content with frontmatter (matching src/content/blog/*.mdx format)
       const today = new Date().toISOString().split("T")[0];
       const publishDate = new Date().toLocaleDateString("en-US", {
         month: "long",
         year: "numeric",
       });
 
-      const frontmatter = [
+      // Get featured image from draft if available
+      const { data: draftData } = await supabase
+        .from("blog_drafts")
+        .select("featured_image")
+        .eq("id", draftId)
+        .single();
+
+      const imageValue = draftData?.featured_image || "";
+      
+      // Build keywords from topic keywords if available
+      const keywords = topic.keywords && topic.keywords.length > 0
+        ? topic.keywords.join(", ")
+        : undefined;
+
+      const frontmatterLines = [
         "---",
         `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
         `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
         `slug: "${slug}"`,
         `category: "${blogPost.category || ""}"`,
+      ];
+
+      // Add image only if it exists
+      if (imageValue) {
+        frontmatterLines.push(`image: "${imageValue.replace(/"/g, '\\"')}"`);
+      }
+
+      frontmatterLines.push(
         `readTime: "${blogPost.readTime || "5 min read"}"`,
         `publishDate: "${publishDate}"`,
         `datePublished: "${today}"`,
-        `dateModified: "${today}"`,
-        "---",
-      ].join("\n");
+        `dateModified: "${today}"`
+      );
+
+      // Add keywords only if they exist
+      if (keywords) {
+        frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
+      }
+
+      frontmatterLines.push("---");
+      const frontmatter = frontmatterLines.join("\n");
 
       const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
 
