@@ -2,10 +2,17 @@
  * Google Gemini API integration for writing blog posts
  */
 
+interface TopicImageInput {
+  url: string;
+  description: string;
+}
+
 interface GeminiBlogRequest {
   topic: string;
   keywords: string[];
   researchNotes?: string;
+  topicDescription?: string;
+  topicImages?: TopicImageInput[];
   targetLength?: number; // Target word count
 }
 
@@ -28,6 +35,8 @@ export async function generateBlogPost({
   topic,
   keywords,
   researchNotes,
+  topicDescription,
+  topicImages,
   targetLength = 1500,
 }: GeminiBlogRequest): Promise<GeminiBlogResponse> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -35,17 +44,23 @@ export async function generateBlogPost({
     throw new Error("GEMINI_API_KEY is not set");
   }
 
-  // Build the prompt for Gemini
   const keywordsList = keywords.length > 0 ? keywords.join(", ") : "general fencing topics";
   const researchContext = researchNotes
     ? `\n\nAdditional research context:\n${researchNotes}`
     : "";
+  const scopeContext = topicDescription
+    ? `\n\nArticle scope (what to cover):\n${topicDescription}`
+    : "";
+  const imagesContext =
+    topicImages && topicImages.length > 0
+      ? `\n\nUse these images in the article where appropriate. Include each with markdown image syntax and use the description for alt text. Place them in relevant sections.\n${topicImages.map((img) => `- URL: ${img.url}\n  Description/use: ${img.description}`).join("\n")}`
+      : "";
 
   const prompt = `You are an expert blog writer specializing in fence installation, maintenance, and related topics for homeowners and contractors in the Seattle/Pacific Northwest area.
 
 Write a comprehensive, SEO-optimized blog post about: ${topic}
 
-Keywords to focus on: ${keywordsList}${researchContext}
+Keywords to focus on: ${keywordsList}${researchContext}${scopeContext}${imagesContext}
 
 CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, professional output:
 
@@ -224,4 +239,109 @@ Start writing now. Output valid JSON only.`;
     console.error("Gemini API error:", error);
     throw new Error(`Failed to generate blog post: ${error.message}`);
   }
+}
+
+// --- Topic research (user idea → suggested title + description) ---
+
+export interface InvestigateTopicResult {
+  suggestedTitle: string;
+  description: string;
+  keywords: string[];
+}
+
+/**
+ * Quick research on a user's topic idea. Returns suggested title and brief description for the article.
+ */
+export async function investigateTopic(idea: string): Promise<InvestigateTopicResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+
+  const prompt = `You are a content strategist for a fence company blog (MyFence.com) in Seattle/Pacific Northwest.
+
+The user has this topic idea: "${idea}"
+
+Do quick research and suggest:
+1. A clear, SEO-friendly article title (under 70 chars)
+2. A brief description (2-3 sentences) of what the article will cover and why it matters to homeowners
+3. A short list of 3-6 keywords for SEO
+
+Respond with JSON only:
+{
+  "suggestedTitle": "Article title here",
+  "description": "Brief description of what the article will cover...",
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}`;
+
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.5, maxOutputTokens: 1024 },
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gemini API: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Invalid Gemini response");
+
+  let jsonText = text.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
+  const parsed = JSON.parse(jsonText);
+  return {
+    suggestedTitle: parsed.suggestedTitle || idea,
+    description: parsed.description || "",
+    keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+  };
+}
+
+/**
+ * Suggest topic ideas when the user is stuck. Returns a list of short topic ideas.
+ */
+export async function suggestTopicIdeas(): Promise<string[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+
+  const prompt = `You are a content strategist for a fence company blog (MyFence.com) in Seattle/Pacific Northwest.
+
+The user is stuck and needs topic ideas. Suggest 6 short, specific topic ideas that would make good blog posts for homeowners. Focus on: fence materials, installation, maintenance, costs, legal/neighbor issues, design, and local (Seattle/PNW) relevance.
+
+Respond with JSON only:
+{
+  "ideas": [
+    "First topic idea in a few words",
+    "Second topic idea",
+    ...
+  ]
+}`;
+
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Gemini API: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Invalid Gemini response");
+
+  let jsonText = text.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
+  const parsed = JSON.parse(jsonText);
+  return Array.isArray(parsed.ideas) ? parsed.ideas : [];
 }

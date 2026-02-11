@@ -2,15 +2,22 @@ export type TopicSource = "user" | "ai";
 export type TopicStatus = "suggested" | "approved" | "in_progress" | "completed" | "rejected";
 export type DraftStatus = "draft" | "review" | "scheduled" | "published" | "failed";
 
+export interface TopicImage {
+  url: string;
+  description: string;
+}
+
 export interface BlogTopic {
   id: string;
   title: string;
+  description: string | null;
   source: TopicSource;
   status: TopicStatus;
   keywords: string[];
   research_notes: string | null;
   progress_status: string | null;
   priority: number;
+  topic_images: TopicImage[];
   created_at: string;
   updated_at: string;
 }

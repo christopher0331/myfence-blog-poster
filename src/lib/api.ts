@@ -103,4 +103,29 @@ export const topicsApi = {
     });
     await handleResponse(response);
   },
+
+  async investigate(idea: string): Promise<{ suggestedTitle: string; description: string; keywords: string[] }> {
+    const response = await fetch(`${API_BASE}/topics/investigate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idea }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Investigate failed");
+    }
+    return response.json();
+  },
+
+  async suggestIdeas(): Promise<string[]> {
+    const response = await fetch(`${API_BASE}/topics/suggest-ideas`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Suggest ideas failed");
+    }
+    const data = await response.json();
+    return data.ideas || [];
+  },
 };

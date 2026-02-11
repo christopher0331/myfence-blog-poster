@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
         topic: topic.title,
         keywords: topic.keywords || [],
         researchNotes: topic.research_notes || undefined,
+        topicDescription: topic.description || undefined,
+        topicImages: Array.isArray(topic.topic_images) ? topic.topic_images : undefined,
         targetLength: 1500,
       });
       console.log(`Successfully generated blog post: ${blogPost.title}`);
