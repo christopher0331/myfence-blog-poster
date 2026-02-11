@@ -202,40 +202,86 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         </div>
       </div>
 
-      {/* Editor Layout: 3 columns */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left: Metadata + Editor */}
-        <div className="col-span-5 space-y-4">
+      {/* Editor Layout: Completeness sidebar on left, then rows */}
+      <div className="flex gap-6">
+        {/* Completeness Sidebar - Far Left */}
+        <div className="w-48 flex-shrink-0">
+          <Card>
+            <CardContent className="p-4">
+              <CompletenessTracker fields={completenessFields} />
+            </CardContent>
+          </Card>
+
+          {draft.featured_image && (
+            <Card className="mt-4">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  Image Preview
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={draft.featured_image}
+                  alt="Featured"
+                  className="rounded-lg w-full object-cover aspect-video"
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {draft.github_pr_url && (
+            <Card className="mt-4">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  GitHub PR
+                </p>
+                <a
+                  href={draft.github_pr_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline break-all"
+                >
+                  {draft.github_pr_url}
+                </a>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Main Content Area - Rows */}
+        <div className="flex-1 space-y-4">
+          {/* Row 1: Post Details */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Post Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Title</label>
-                <Input
-                  value={draft.title}
-                  onChange={(e) => updateField("title", e.target.value)}
-                  placeholder="Enter post title..."
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Slug</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">/blog/</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Title</label>
                   <Input
-                    value={draft.slug}
-                    onChange={(e) =>
-                      updateField(
-                        "slug",
-                        e.target.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9-]/g, "-")
-                          .replace(/-+/g, "-")
-                      )
-                    }
-                    placeholder="post-slug"
+                    value={draft.title}
+                    onChange={(e) => updateField("title", e.target.value)}
+                    placeholder="Enter post title..."
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Slug</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">/blog/</span>
+                    <Input
+                      value={draft.slug}
+                      onChange={(e) =>
+                        updateField(
+                          "slug",
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, "-")
+                            .replace(/-+/g, "-")
+                        )
+                      }
+                      placeholder="post-slug"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -249,11 +295,11 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                   value={draft.meta_description}
                   onChange={(e) => updateField("meta_description", e.target.value)}
                   placeholder="Brief description for SEO..."
-                  rows={3}
+                  rows={2}
                   maxLength={160}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Category</label>
                   <Select
@@ -276,16 +322,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                     placeholder="6 min read"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Featured Image URL</label>
-                <Input
-                  value={draft.featured_image}
-                  onChange={(e) => updateField("featured_image", e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Status</label>
                   <Select
@@ -310,10 +346,33 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                   />
                 </div>
               </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Featured Image URL</label>
+                <Input
+                  value={draft.featured_image}
+                  onChange={(e) => updateField("featured_image", e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
             </CardContent>
           </Card>
 
-          {/* MDX Body Editor */}
+          {/* Row 2: Preview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MDXPreview
+                content={draft.body_mdx}
+                title={draft.title}
+                description={draft.meta_description}
+                category={draft.category}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Row 3: Content Editor */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Content (MDX)</CardTitle>
@@ -323,8 +382,8 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                 value={draft.body_mdx}
                 onChange={(e) => updateField("body_mdx", e.target.value)}
                 placeholder="Write your blog post in Markdown / MDX..."
-                className="font-mono text-sm min-h-[400px] resize-y"
-                rows={20}
+                className="font-mono text-sm min-h-[500px] resize-y"
+                rows={25}
               />
               <p className="text-xs text-muted-foreground mt-2">
                 {draft.body_mdx?.split(/\s+/).filter(Boolean).length || 0} words ·{" "}
@@ -332,59 +391,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
               </p>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Middle: Live Preview */}
-        <div className="col-span-5">
-          <MDXPreview
-            content={draft.body_mdx}
-            title={draft.title}
-            description={draft.meta_description}
-            category={draft.category}
-          />
-        </div>
-
-        {/* Right: Completeness Sidebar */}
-        <div className="col-span-2 space-y-4">
-          <Card>
-            <CardContent className="p-4">
-              <CompletenessTracker fields={completenessFields} />
-            </CardContent>
-          </Card>
-
-          {draft.featured_image && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  Image Preview
-                </p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={draft.featured_image}
-                  alt="Featured"
-                  className="rounded-lg w-full object-cover aspect-video"
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {draft.github_pr_url && (
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                  GitHub PR
-                </p>
-                <a
-                  href={draft.github_pr_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline break-all"
-                >
-                  {draft.github_pr_url}
-                </a>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     </div>

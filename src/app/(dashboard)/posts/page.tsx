@@ -206,7 +206,7 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
     completenessFields.reduce((sum, f) => sum + f.value, 0) / completenessFields.length
   );
 
-  // Strip markdown for preview
+  // Strip markdown for preview (keep full length)
   const contentPreview = post.body_mdx
     ? post.body_mdx
         .replace(/```[\s\S]*?```/g, "") // Remove code blocks
@@ -214,9 +214,7 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
         .replace(/#{1,6}\s+/g, "") // Remove headers
         .replace(/\*\*([^\*]+)\*\*/g, "$1") // Remove bold
         .replace(/\*([^\*]+)\*/g, "$1") // Remove italic
-        .replace(/\n+/g, " ") // Replace newlines with spaces
         .trim()
-        .substring(0, 200)
     : "";
 
   return (
@@ -312,10 +310,9 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
 
             {/* Row 3: Content Preview */}
             {contentPreview && (
-              <div>
-                <p className="text-sm text-muted-foreground line-clamp-3">
+              <div className="max-h-96 overflow-y-auto">
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                   {contentPreview}
-                  {contentPreview.length >= 200 && "..."}
                 </p>
               </div>
             )}
