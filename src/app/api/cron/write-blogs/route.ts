@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { commitBlogDirectly } from "@/lib/github";
+import { getArticleBuildMode } from "@/lib/settings";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -39,9 +40,18 @@ export async function GET(request: NextRequest) {
   }
 
   let topicId: string | null = null;
-  
+
   try {
     const supabase = getAdminClient();
+
+    const articleBuildMode = await getArticleBuildMode(supabase);
+    if (articleBuildMode === "manual") {
+      return NextResponse.json({
+        success: true,
+        message: "Cron disabled – manual mode",
+        processed: 0,
+      });
+    }
 
     // Find approved topics that haven't been written yet
     const { data: topics, error: topicsError } = await supabase
@@ -97,6 +107,8 @@ export async function GET(request: NextRequest) {
         topic: topic.title,
         keywords: topic.keywords || [],
         researchNotes: topic.research_notes || undefined,
+        topicDescription: topic.description || undefined,
+        topicImages: Array.isArray(topic.topic_images) ? topic.topic_images : undefined,
         targetLength: 1500,
       });
       console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);

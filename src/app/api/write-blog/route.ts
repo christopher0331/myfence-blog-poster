@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
-import { createBlogPR, commitBlogDirectly } from "@/lib/github";
+import { commitBlogDirectly } from "@/lib/github";
+import { getArticleBuildMode } from "@/lib/settings";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -41,6 +42,17 @@ export async function POST(req: NextRequest) {
 
     if (topicError || !topic) {
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
+    }
+
+    const articleBuildMode = await getArticleBuildMode(supabase);
+    if (commitToGitHub && articleBuildMode === "cron") {
+      return NextResponse.json(
+        {
+          error:
+            "Publishing is set to Cron only. Use Settings to switch to Manual only if you want to commit from the app.",
+        },
+        { status: 400 }
+      );
     }
 
     // Check if topic is approved and ready
