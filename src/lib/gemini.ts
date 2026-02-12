@@ -210,9 +210,19 @@ Start writing now. Output valid JSON only.`;
 
     try {
       const parsed = JSON.parse(jsonText);
+      // Ensure content is actual MDX/markdown, not raw JSON (model sometimes puts full JSON in content field)
+      let content: string = parsed.content ?? generatedText;
+      if (typeof content === "string" && content.trim().startsWith("{")) {
+        try {
+          const inner = JSON.parse(content);
+          if (typeof inner.content === "string") content = inner.content;
+        } catch {
+          // leave content as-is
+        }
+      }
       return {
         title: parsed.title || topic,
-        content: parsed.content || generatedText,
+        content,
         metaDescription: parsed.metaDescription || `Learn about ${topic.toLowerCase()}`,
         category: parsed.category,
         readTime: parsed.readTime || "5 min read",

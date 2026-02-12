@@ -138,18 +138,28 @@ export async function GET(request: NextRequest) {
 
     let draftId: string;
 
+    const bp = blogPost as { featuredImage?: string; imageCaption?: string; layout?: string; showArticleSummary?: boolean };
+    const draftPayload = {
+      title: blogPost.title,
+      body_mdx: blogPost.content,
+      meta_description: blogPost.metaDescription,
+      category: blogPost.category || "",
+      read_time: blogPost.readTime || "5 min read",
+      featured_image: bp.featuredImage || null,
+      structured_data: {
+        imageCaption: bp.imageCaption,
+        layout: bp.layout,
+        showArticleSummary: bp.showArticleSummary,
+      },
+      topic_id: topic.id,
+      status: "scheduled" as const,
+    };
+
     if (existingDraft) {
-      // Update existing draft
       const { data: updatedDraft, error: updateError } = await supabase
         .from("blog_drafts")
         .update({
-          title: blogPost.title,
-          body_mdx: blogPost.content,
-          meta_description: blogPost.metaDescription,
-          category: blogPost.category || "",
-          read_time: blogPost.readTime || "5 min read",
-          topic_id: topic.id,
-          status: "scheduled",
+          ...draftPayload,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingDraft.id)
@@ -161,19 +171,9 @@ export async function GET(request: NextRequest) {
       }
       draftId = updatedDraft.id;
     } else {
-      // Create new draft
       const { data: newDraft, error: createError } = await supabase
         .from("blog_drafts")
-        .insert({
-          title: blogPost.title,
-          slug,
-          body_mdx: blogPost.content,
-          meta_description: blogPost.metaDescription,
-          category: blogPost.category || "",
-          read_time: blogPost.readTime || "5 min read",
-          topic_id: topic.id,
-          status: "scheduled",
-        })
+        .insert({ ...draftPayload, slug })
         .select()
         .single();
 
@@ -193,26 +193,12 @@ export async function GET(request: NextRequest) {
         .eq("id", topic.id);
       
       console.log(`[Cron] Committing to GitHub: ${slug}`);
-      // Build MDX content with frontmatter (matching src/content/blog/*.mdx format)
+      // Build MDX content with frontmatter (same as manual write-blog for polished output)
       const today = new Date().toISOString().split("T")[0];
       const publishDate = new Date().toLocaleDateString("en-US", {
         month: "long",
         year: "numeric",
       });
-
-      // Get featured image from draft if available
-      const { data: draftData } = await supabase
-        .from("blog_drafts")
-        .select("featured_image")
-        .eq("id", draftId)
-        .single();
-
-      const imageValue = draftData?.featured_image || "";
-      
-      // Build keywords from topic keywords if available
-      const keywords = topic.keywords && topic.keywords.length > 0
-        ? topic.keywords.join(", ")
-        : undefined;
 
       const frontmatterLines = [
         "---",
@@ -220,26 +206,15 @@ export async function GET(request: NextRequest) {
         `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
         `slug: "${slug}"`,
         `category: "${blogPost.category || ""}"`,
-      ];
-
-      // Add image only if it exists
-      if (imageValue) {
-        frontmatterLines.push(`image: "${imageValue.replace(/"/g, '\\"')}"`);
-      }
-
-      frontmatterLines.push(
+        `image: "${(bp.featuredImage || "").replace(/"/g, '\\"')}"`,
         `readTime: "${blogPost.readTime || "5 min read"}"`,
         `publishDate: "${publishDate}"`,
         `datePublished: "${today}"`,
-        `dateModified: "${today}"`
-      );
-
-      // Add keywords only if they exist
-      if (keywords) {
-        frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
-      }
-
-      frontmatterLines.push("---");
+        `dateModified: "${today}"`,
+        bp.imageCaption ? `imageCaption: "${String(bp.imageCaption).replace(/"/g, '\\"')}"` : null,
+        bp.layout ? `layout: "${bp.layout}"` : null,
+        bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
+      ].filter(Boolean);
       const frontmatter = frontmatterLines.join("\n");
 
       const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
