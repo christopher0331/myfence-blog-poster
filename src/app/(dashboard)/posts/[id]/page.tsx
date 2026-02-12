@@ -245,10 +245,10 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         </div>
       </div>
 
-      {/* Editor Layout: Completeness sidebar on left, then rows */}
-      <div className="flex gap-6">
-        {/* Completeness Sidebar - Far Left */}
-        <div className="w-48 flex-shrink-0">
+      {/* Editor Layout: Completeness sidebar on left (desktop) / top (mobile), then rows */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Completeness Sidebar */}
+        <div className="lg:w-48 flex-shrink-0 min-w-0">
           <Card>
             <CardContent className="p-4">
               <CompletenessTracker fields={completenessFields} />
@@ -298,7 +298,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
               <CardTitle className="text-lg">Post Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Title</label>
                   <Input
@@ -342,7 +342,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                   maxLength={160}
                 />
               </div>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">Category</label>
                   <Select

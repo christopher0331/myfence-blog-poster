@@ -75,14 +75,14 @@ export default function PostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">All Posts</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">All Posts</h1>
           <p className="text-muted-foreground mt-1">
             Manage your blog content library
           </p>
         </div>
-        <Button onClick={createNewDraft}>
+        <Button onClick={createNewDraft} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
           <Plus className="h-4 w-4 mr-2" />
           New Post
         </Button>
@@ -219,15 +219,15 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
 
   return (
     <Card
-      className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50 group"
+      className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50 group touch-manipulation"
       onClick={onClick}
     >
       <CardContent className="p-0">
-        <div className="flex gap-4">
-          {/* Completeness Sidebar - Far Left */}
-          <div className="w-32 flex-shrink-0 border-r bg-muted/30 p-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-0 sm:gap-4">
+          {/* Completeness - compact on mobile, sidebar on desktop */}
+          <div className="sm:w-32 flex-shrink-0 border-b sm:border-b-0 sm:border-r bg-muted/30 p-4">
+            <div className="flex sm:flex-col items-center justify-between sm:items-stretch gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Complete
                 </span>
@@ -240,8 +240,8 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
                   {overall}%
                 </span>
               </div>
-              <Progress value={overall} className="h-2" />
-              <div className="space-y-1.5">
+              <Progress value={overall} className="h-2 flex-1 sm:flex-initial max-w-[120px] sm:max-w-none" />
+              <div className="hidden sm:flex flex-col space-y-1.5">
                 {completenessFields.map((field) => (
                   <div key={field.key} className="flex items-center gap-1.5 text-xs">
                     {field.value >= 100 ? (
@@ -259,19 +259,19 @@ function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
           </div>
 
           {/* Main Content Area */}
-          <div className="flex-1 p-4 space-y-3">
+          <div className="flex-1 p-4 space-y-3 min-w-0">
             {/* Row 1: Post Details */}
-            <div className="flex items-start justify-between gap-4 pb-3 border-b">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-3 border-b">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="font-semibold text-lg truncate">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                  <h3 className="font-semibold text-base sm:text-lg truncate">
                     {post.title || "Untitled Post"}
                   </h3>
                   <Badge variant={statusColor(post.status)} className="flex-shrink-0">
                     {post.status}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground flex-wrap">
                   {post.category && (
                     <Badge variant="outline" className="text-xs">
                       {post.category}

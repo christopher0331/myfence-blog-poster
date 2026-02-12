@@ -79,14 +79,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Scheduled Posts</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Scheduled Posts</h1>
           <p className="text-muted-foreground mt-1">
             View and manage your upcoming blog content
           </p>
         </div>
-        <Button onClick={() => router.push("/posts")}>
+        <Button onClick={() => router.push("/posts")} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
           <Plus className="h-4 w-4 mr-2" />
           New Post
         </Button>

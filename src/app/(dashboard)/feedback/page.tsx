@@ -12,6 +12,7 @@ import {
   Loader2,
   ImagePlus,
   ChevronRight,
+  ChevronLeft,
   User,
   ShieldCheck,
   ExternalLink,
@@ -218,9 +219,9 @@ export default function FeedbackPage() {
             Change requests and suggestions from your client. Reply here and track status.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">Client submit link:</span>
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="sm" asChild className="min-h-[44px] touch-manipulation">
             <a href={clientSubmitUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4 mr-2" />
               Open submit page
@@ -311,27 +312,41 @@ export default function FeedbackPage() {
 
         {/* Thread detail + reply */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="space-y-3">
             {selectedThread ? (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <CardTitle className="text-lg">
-                  {selectedThread.subject || "No subject"}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <Select
-                    value={selectedThread.status}
-                    onChange={(e) => updateStatus(selectedThread.id, e.target.value)}
-                    className="w-[140px]"
+              <>
+                <div className="flex items-center gap-2 lg:hidden">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedThread(null)}
+                    className="min-h-[44px] touch-manipulation -ml-2"
                   >
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </Select>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Back to list
+                  </Button>
                 </div>
-              </div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <CardTitle className="text-lg">
+                    {selectedThread.subject || "No subject"}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <Select
+                      value={selectedThread.status}
+                      onChange={(e) => updateStatus(selectedThread.id, e.target.value)}
+                      className="w-full sm:w-[140px] min-h-[44px]"
+                    >
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+              </>
             ) : (
               <CardTitle className="text-lg text-muted-foreground">
                 Select a request to view and reply
