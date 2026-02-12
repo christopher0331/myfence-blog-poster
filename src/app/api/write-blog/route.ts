@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { commitBlogDirectly } from "@/lib/github";
 import { getArticleBuildMode } from "@/lib/settings";
+import { safeFrontmatterValue } from "@/lib/utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -173,17 +174,17 @@ export async function POST(req: NextRequest) {
         const bp = blogPost as any;
         const frontmatterLines = [
           "---",
-          `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
-          `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
-          `slug: "${slug}"`,
-          `category: "${blogPost.category || ""}"`,
-          `image: "${bp.featuredImage || ""}"`,
-          `readTime: "${blogPost.readTime || "5 min read"}"`,
+          `title: "${safeFrontmatterValue(blogPost.title)}"`,
+          `description: "${safeFrontmatterValue(blogPost.metaDescription)}"`,
+          `slug: "${safeFrontmatterValue(slug)}"`,
+          `category: "${safeFrontmatterValue(blogPost.category)}"`,
+          `image: "${safeFrontmatterValue(bp.featuredImage)}"`,
+          `readTime: "${safeFrontmatterValue(blogPost.readTime) || "5 min read"}"`,
           `publishDate: "${publishDate}"`,
           `datePublished: "${today}"`,
           `dateModified: "${today}"`,
-          bp.imageCaption ? `imageCaption: "${String(bp.imageCaption).replace(/"/g, '\\"')}"` : null,
-          bp.layout ? `layout: "${bp.layout}"` : null,
+          bp.imageCaption != null && bp.imageCaption !== "" ? `imageCaption: "${safeFrontmatterValue(String(bp.imageCaption))}"` : null,
+          bp.layout ? `layout: "${safeFrontmatterValue(bp.layout)}"` : null,
           bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
         ].filter(Boolean);
         const frontmatter = frontmatterLines.join("\n");
