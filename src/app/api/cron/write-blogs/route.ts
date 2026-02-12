@@ -187,12 +187,15 @@ export async function GET(request: NextRequest) {
     // Commit directly to GitHub
     let githubUrl: string | null = null;
     try {
-      // Update progress: Committing to GitHub
+      // Mark topic completed immediately so it won't be picked again by another cron run
       await supabase
         .from("blog_topics")
-        .update({ progress_status: "Committing to GitHub repository..." })
+        .update({
+          status: "completed",
+          progress_status: "Committing to GitHub repository...",
+        })
         .eq("id", topic.id);
-      
+
       console.log(`[Cron] Committing to GitHub: ${slug}`);
       // Build MDX content with frontmatter (same as manual write-blog for polished output)
       const today = new Date().toISOString().split("T")[0];
@@ -241,12 +244,11 @@ export async function GET(request: NextRequest) {
         })
         .eq("id", draftId);
 
-      // Mark topic as completed
+      // Update progress message (topic already marked completed above)
       await supabase
         .from("blog_topics")
-        .update({ 
-          status: "completed",
-          progress_status: "✓ Blog post successfully created and published!"
+        .update({
+          progress_status: "✓ Blog post successfully created and published!",
         })
         .eq("id", topic.id);
     } catch (githubError: any) {

@@ -191,6 +191,12 @@ export async function POST(req: NextRequest) {
 
         const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
 
+        // Mark topic completed immediately so it won't be picked by cron or double-published
+        await supabase
+          .from("blog_topics")
+          .update({ status: "completed" })
+          .eq("id", topicId);
+
         // Commit directly to main branch
         const { commitUrl } = await commitBlogDirectly({
           slug,
@@ -201,7 +207,7 @@ export async function POST(req: NextRequest) {
 
         githubUrl = commitUrl;
 
-        // Update draft with GitHub URL
+        // Update draft with GitHub URL (topic already marked completed above)
         await supabase
           .from("blog_drafts")
           .update({
@@ -210,12 +216,6 @@ export async function POST(req: NextRequest) {
             published_at: new Date().toISOString(),
           })
           .eq("id", draftId);
-
-        // Mark topic as completed
-        await supabase
-          .from("blog_topics")
-          .update({ status: "completed" })
-          .eq("id", topicId);
       } catch (githubError: any) {
         console.error("GitHub commit error:", githubError);
         // Don't fail the whole request if GitHub fails
