@@ -7,6 +7,7 @@ import {
   FileText,
   Lightbulb,
   Calendar,
+  Settings,
   LogOut,
 } from "lucide-react";
 
@@ -14,6 +15,7 @@ const navItems = [
   { href: "/", label: "Scheduled Posts", icon: Calendar },
   { href: "/posts", label: "All Posts", icon: FileText },
   { href: "/topics", label: "Research Topics", icon: Lightbulb },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Sidebar() {
