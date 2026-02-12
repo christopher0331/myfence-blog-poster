@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { commitBlogDirectly } from "@/lib/github";
-import { getArticleBuildMode } from "@/lib/settings";
-import { safeFrontmatterValue } from "@/lib/utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -41,18 +39,9 @@ export async function GET(request: NextRequest) {
   }
 
   let topicId: string | null = null;
-
+  
   try {
     const supabase = getAdminClient();
-
-    const articleBuildMode = await getArticleBuildMode(supabase);
-    if (articleBuildMode === "manual") {
-      return NextResponse.json({
-        success: true,
-        message: "Cron disabled – manual mode",
-        processed: 0,
-      });
-    }
 
     // Find approved topics that haven't been written yet
     const { data: topics, error: topicsError } = await supabase
@@ -108,8 +97,6 @@ export async function GET(request: NextRequest) {
         topic: topic.title,
         keywords: topic.keywords || [],
         researchNotes: topic.research_notes || undefined,
-        topicDescription: topic.description || undefined,
-        topicImages: Array.isArray(topic.topic_images) ? topic.topic_images : undefined,
         targetLength: 1500,
       });
       console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);
@@ -139,28 +126,18 @@ export async function GET(request: NextRequest) {
 
     let draftId: string;
 
-    const bp = blogPost as { featuredImage?: string; imageCaption?: string; layout?: string; showArticleSummary?: boolean };
-    const draftPayload = {
-      title: blogPost.title,
-      body_mdx: blogPost.content,
-      meta_description: blogPost.metaDescription,
-      category: blogPost.category || "",
-      read_time: blogPost.readTime || "5 min read",
-      featured_image: bp.featuredImage || null,
-      structured_data: {
-        imageCaption: bp.imageCaption,
-        layout: bp.layout,
-        showArticleSummary: bp.showArticleSummary,
-      },
-      topic_id: topic.id,
-      status: "scheduled" as const,
-    };
-
     if (existingDraft) {
+      // Update existing draft
       const { data: updatedDraft, error: updateError } = await supabase
         .from("blog_drafts")
         .update({
-          ...draftPayload,
+          title: blogPost.title,
+          body_mdx: blogPost.content,
+          meta_description: blogPost.metaDescription,
+          category: blogPost.category || "",
+          read_time: blogPost.readTime || "5 min read",
+          topic_id: topic.id,
+          status: "scheduled",
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingDraft.id)
@@ -172,9 +149,19 @@ export async function GET(request: NextRequest) {
       }
       draftId = updatedDraft.id;
     } else {
+      // Create new draft
       const { data: newDraft, error: createError } = await supabase
         .from("blog_drafts")
-        .insert({ ...draftPayload, slug })
+        .insert({
+          title: blogPost.title,
+          slug,
+          body_mdx: blogPost.content,
+          meta_description: blogPost.metaDescription,
+          category: blogPost.category || "",
+          read_time: blogPost.readTime || "5 min read",
+          topic_id: topic.id,
+          status: "scheduled",
+        })
         .select()
         .single();
 
@@ -187,38 +174,60 @@ export async function GET(request: NextRequest) {
     // Commit directly to GitHub
     let githubUrl: string | null = null;
     try {
-      // Mark topic completed immediately so it won't be picked again by another cron run
+      // Update progress: Committing to GitHub
       await supabase
         .from("blog_topics")
-        .update({
-          status: "completed",
-          progress_status: "Committing to GitHub repository...",
-        })
+        .update({ progress_status: "Committing to GitHub repository..." })
         .eq("id", topic.id);
-
+      
       console.log(`[Cron] Committing to GitHub: ${slug}`);
-      // Build MDX content with frontmatter (same as manual write-blog for polished output)
+      // Build MDX content with frontmatter (matching src/content/blog/*.mdx format)
       const today = new Date().toISOString().split("T")[0];
       const publishDate = new Date().toLocaleDateString("en-US", {
         month: "long",
         year: "numeric",
       });
 
+      // Get featured image from draft if available
+      const { data: draftData } = await supabase
+        .from("blog_drafts")
+        .select("featured_image")
+        .eq("id", draftId)
+        .single();
+
+      const imageValue = draftData?.featured_image || "";
+      
+      // Build keywords from topic keywords if available
+      const keywords = topic.keywords && topic.keywords.length > 0
+        ? topic.keywords.join(", ")
+        : undefined;
+
       const frontmatterLines = [
         "---",
-        `title: "${safeFrontmatterValue(blogPost.title)}"`,
-        `description: "${safeFrontmatterValue(blogPost.metaDescription)}"`,
-        `slug: "${safeFrontmatterValue(slug)}"`,
-        `category: "${safeFrontmatterValue(blogPost.category)}"`,
-        `image: "${safeFrontmatterValue(bp.featuredImage)}"`,
-        `readTime: "${safeFrontmatterValue(blogPost.readTime) || "5 min read"}"`,
+        `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
+        `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
+        `slug: "${slug}"`,
+        `category: "${blogPost.category || ""}"`,
+      ];
+
+      // Add image only if it exists
+      if (imageValue) {
+        frontmatterLines.push(`image: "${imageValue.replace(/"/g, '\\"')}"`);
+      }
+
+      frontmatterLines.push(
+        `readTime: "${blogPost.readTime || "5 min read"}"`,
         `publishDate: "${publishDate}"`,
         `datePublished: "${today}"`,
-        `dateModified: "${today}"`,
-        bp.imageCaption != null && bp.imageCaption !== "" ? `imageCaption: "${safeFrontmatterValue(String(bp.imageCaption))}"` : null,
-        bp.layout ? `layout: "${safeFrontmatterValue(bp.layout)}"` : null,
-        bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
-      ].filter(Boolean);
+        `dateModified: "${today}"`
+      );
+
+      // Add keywords only if they exist
+      if (keywords) {
+        frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
+      }
+
+      frontmatterLines.push("---");
       const frontmatter = frontmatterLines.join("\n");
 
       const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
@@ -244,11 +253,12 @@ export async function GET(request: NextRequest) {
         })
         .eq("id", draftId);
 
-      // Update progress message (topic already marked completed above)
+      // Mark topic as completed
       await supabase
         .from("blog_topics")
-        .update({
-          progress_status: "✓ Blog post successfully created and published!",
+        .update({ 
+          status: "completed",
+          progress_status: "✓ Blog post successfully created and published!"
         })
         .eq("id", topic.id);
     } catch (githubError: any) {

@@ -1,55 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
-import { Github, Database, Key, FileEdit } from "lucide-react";
-
-type ArticleBuildMode = "manual" | "cron";
+import { Settings, Github, Database, Key } from "lucide-react";
 
 export default function SettingsPage() {
-  const [articleBuildMode, setArticleBuildMode] = useState<ArticleBuildMode>("manual");
-  const [settingsLoading, setSettingsLoading] = useState(true);
-  const [savingMode, setSavingMode] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/settings");
-        const data = await res.json();
-        if (data.article_build_mode === "cron" || data.article_build_mode === "manual") {
-          setArticleBuildMode(data.article_build_mode);
-        }
-      } catch {
-        // keep default manual
-      } finally {
-        setSettingsLoading(false);
-      }
-    })();
-  }, []);
-
-  async function handleArticleBuildModeChange(value: string) {
-    const mode = value === "cron" ? "cron" : "manual";
-    setSavingMode(true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article_build_mode: mode }),
-      });
-      if (res.ok) {
-        setArticleBuildMode(mode);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Failed to save");
-      }
-    } finally {
-      setSavingMode(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -58,39 +14,6 @@ export default function SettingsPage() {
           Configure integrations and preferences
         </p>
       </div>
-
-      {/* Article build mode */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <FileEdit className="h-5 w-5" />
-            <div>
-              <CardTitle className="text-lg">Article build</CardTitle>
-              <CardDescription>
-                Choose whether blog posts are written and published manually from Studio or by the scheduled cron job only.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-1 block">Mode</label>
-            <Select
-              value={articleBuildMode}
-              onChange={(e) => handleArticleBuildModeChange(e.target.value)}
-              disabled={settingsLoading || savingMode}
-              className="max-w-xs"
-            >
-              <option value="manual">Manual only</option>
-              <option value="cron">Cron only</option>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Manual only: use &quot;Write blog&quot; / &quot;Commit to GitHub&quot; in the app; cron will do nothing.
-            Cron only: the scheduled job writes and publishes from approved topics; manual commit is disabled.
-          </p>
-        </CardContent>
-      </Card>
 
       {/* GitHub Configuration */}
       <Card>

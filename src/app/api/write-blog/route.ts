@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
-import { commitBlogDirectly } from "@/lib/github";
-import { getArticleBuildMode } from "@/lib/settings";
-import { safeFrontmatterValue } from "@/lib/utils";
+import { createBlogPR, commitBlogDirectly } from "@/lib/github";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -43,17 +41,6 @@ export async function POST(req: NextRequest) {
 
     if (topicError || !topic) {
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
-    }
-
-    const articleBuildMode = await getArticleBuildMode(supabase);
-    if (commitToGitHub && articleBuildMode === "cron") {
-      return NextResponse.json(
-        {
-          error:
-            "Publishing is set to Cron only. Use Settings to switch to Manual only if you want to commit from the app.",
-        },
-        { status: 400 }
-      );
     }
 
     // Check if topic is approved and ready
@@ -174,28 +161,22 @@ export async function POST(req: NextRequest) {
         const bp = blogPost as any;
         const frontmatterLines = [
           "---",
-          `title: "${safeFrontmatterValue(blogPost.title)}"`,
-          `description: "${safeFrontmatterValue(blogPost.metaDescription)}"`,
-          `slug: "${safeFrontmatterValue(slug)}"`,
-          `category: "${safeFrontmatterValue(blogPost.category)}"`,
-          `image: "${safeFrontmatterValue(bp.featuredImage)}"`,
-          `readTime: "${safeFrontmatterValue(blogPost.readTime) || "5 min read"}"`,
+          `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
+          `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
+          `slug: "${slug}"`,
+          `category: "${blogPost.category || ""}"`,
+          `image: "${bp.featuredImage || ""}"`,
+          `readTime: "${blogPost.readTime || "5 min read"}"`,
           `publishDate: "${publishDate}"`,
           `datePublished: "${today}"`,
           `dateModified: "${today}"`,
-          bp.imageCaption != null && bp.imageCaption !== "" ? `imageCaption: "${safeFrontmatterValue(String(bp.imageCaption))}"` : null,
-          bp.layout ? `layout: "${safeFrontmatterValue(bp.layout)}"` : null,
+          bp.imageCaption ? `imageCaption: "${String(bp.imageCaption).replace(/"/g, '\\"')}"` : null,
+          bp.layout ? `layout: "${bp.layout}"` : null,
           bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
         ].filter(Boolean);
         const frontmatter = frontmatterLines.join("\n");
 
         const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
-
-        // Mark topic completed immediately so it won't be picked by cron or double-published
-        await supabase
-          .from("blog_topics")
-          .update({ status: "completed" })
-          .eq("id", topicId);
 
         // Commit directly to main branch
         const { commitUrl } = await commitBlogDirectly({
@@ -207,7 +188,7 @@ export async function POST(req: NextRequest) {
 
         githubUrl = commitUrl;
 
-        // Update draft with GitHub URL (topic already marked completed above)
+        // Update draft with GitHub URL
         await supabase
           .from("blog_drafts")
           .update({
@@ -216,6 +197,12 @@ export async function POST(req: NextRequest) {
             published_at: new Date().toISOString(),
           })
           .eq("id", draftId);
+
+        // Mark topic as completed
+        await supabase
+          .from("blog_topics")
+          .update({ status: "completed" })
+          .eq("id", topicId);
       } catch (githubError: any) {
         console.error("GitHub commit error:", githubError);
         // Don't fail the whole request if GitHub fails
