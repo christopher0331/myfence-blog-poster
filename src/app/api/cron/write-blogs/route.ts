@@ -43,20 +43,20 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient();
 
-    // Find approved topics that haven't been written yet
-    const { data: topics, error: topicsError } = await supabase
-      .from("blog_topics")
-      .select("*")
-      .eq("status", "approved")
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(1); // Process one topic per cron run
+    // Atomically claim the next approved topic. Uses FOR UPDATE SKIP LOCKED
+    // so concurrent cron runs cannot claim the same topic (prevents duplicate writes).
+    const { data: claimedTopics, error: claimError } = await supabase
+      .rpc("claim_next_approved_topic");
 
-    if (topicsError) {
-      throw new Error(`Failed to fetch topics: ${topicsError.message}`);
+    if (claimError) {
+      throw new Error(`Failed to claim topic: ${claimError.message}`);
     }
 
-    if (!topics || topics.length === 0) {
+    const topic = Array.isArray(claimedTopics) && claimedTopics.length > 0
+      ? claimedTopics[0]
+      : null;
+
+    if (!topic) {
       return NextResponse.json({
         success: true,
         message: "No approved topics to process",
@@ -64,17 +64,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const topic = topics[0];
     topicId = topic.id;
-    
-    // Update topic status to in_progress with initial progress
-    await supabase
-      .from("blog_topics")
-      .update({ 
-        status: "in_progress",
-        progress_status: "Starting research and content generation..."
-      })
-      .eq("id", topic.id);
+
+    // Topic is already set to in_progress by claim_next_approved_topic
 
     // Generate blog post using Gemini
     console.log(`[Cron] Generating blog post for topic: ${topic.title}`);
