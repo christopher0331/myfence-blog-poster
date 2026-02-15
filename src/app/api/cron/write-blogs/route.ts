@@ -245,23 +245,17 @@ export async function GET(request: NextRequest) {
         })
         .eq("id", draftId);
 
-      // Mark topic as completed
+      // Mark topic as completed (only status - progress_status column may not exist)
       await supabase
         .from("blog_topics")
-        .update({ 
-          status: "completed",
-          progress_status: "✓ Blog post successfully created and published!"
-        })
+        .update({ status: "completed" })
         .eq("id", topic.id);
     } catch (githubError: any) {
       console.error("[Cron] GitHub commit error:", githubError);
-      // Update progress with error but mark as completed since draft was created
+      // Mark as completed since draft was created (progress_status column may not exist)
       await supabase
         .from("blog_topics")
-        .update({ 
-          status: "completed",
-          progress_status: "✓ Draft created, but GitHub commit failed. Check logs."
-        })
+        .update({ status: "completed" })
         .eq("id", topic.id);
       // Don't fail the whole request if GitHub fails, but log it
     }
@@ -288,10 +282,7 @@ export async function GET(request: NextRequest) {
       try {
         await getAdminClient()
           .from("blog_topics")
-          .update({ 
-            status: "approved", // Reset to approved so it can be retried
-            progress_status: `❌ Error: ${error.message || "Failed to process"}` 
-          })
+          .update({ status: "approved" }) // Reset so it can be retried
           .eq("id", topicId);
       } catch (updateError) {
         console.error("Failed to update topic error status:", updateError);
