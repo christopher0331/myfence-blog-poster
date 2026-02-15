@@ -11,19 +11,18 @@ import { topicsApi } from "@/lib/api";
 import type { BlogTopic, TopicStatus, TopicImage } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: TopicStatus; label: string; description: string }[] = [
-  { value: "suggested", label: "Suggested", description: "New topic ideas" },
-  { value: "approved", label: "Approved", description: "Ready to write" },
-  { value: "in_progress", label: "In progress", description: "Draft being written" },
-  { value: "completed", label: "Ready", description: "Published or ready" },
-  { value: "rejected", label: "Rejected", description: "Not pursuing" },
+  { value: "preparing", label: "Preparing", description: "Staged, do nothing" },
+  { value: "ready", label: "Ready", description: "Cron will write article" },
+  { value: "in_progress", label: "In progress", description: "Currently being written" },
+  { value: "completed", label: "Completed", description: "Done" },
 ];
 
 const statusBadgeVariant = (status: TopicStatus) => {
   switch (status) {
     case "completed": return "success" as const;
-    case "approved": return "default" as const;
+    case "ready": return "default" as const;
     case "in_progress": return "warning" as const;
-    case "rejected": return "destructive" as const;
+    case "preparing": return "secondary" as const;
     default: return "secondary" as const;
   }
 };
@@ -138,7 +137,7 @@ export default function TopicsPage() {
         description: researchResult.description,
         keywords: researchResult.keywords,
         source: "user",
-        status: "suggested",
+        status: "preparing",
         priority: 5,
       });
       resetForm();
@@ -162,7 +161,7 @@ export default function TopicsPage() {
         priority: form.priority,
         source: form.source,
         topic_images: form.topic_images,
-        ...(editingId ? {} : { status: "suggested" as TopicStatus }),
+        ...(editingId ? {} : { status: "preparing" as TopicStatus }),
       };
       if (editingId) {
         await topicsApi.update(editingId, payload);

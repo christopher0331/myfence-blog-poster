@@ -43,12 +43,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
     }
 
-    // Only process topics that haven't had an article written yet.
-    // in_progress = article already written (or being written)
-    // completed = published
-    if (topic.status !== "approved") {
+    // Only process topics that are ready to be written.
+    // preparing = staged, ready = cron will write, in_progress = being written, completed = done
+    if (topic.status !== "ready") {
       return NextResponse.json(
-        { error: `Topic cannot trigger article writing. Status must be "approved". Current status: "${topic.status}". Topics with "in_progress" or "completed" already have articles written.` },
+        { error: `Topic cannot trigger article writing. Status must be "ready". Current status: "${topic.status}".` },
         { status: 400 }
       );
     }

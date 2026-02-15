@@ -20,7 +20,7 @@ function getAdminClient() {
 
 /**
  * GET /api/cron/write-blogs
- * Scheduled cron job to automatically write blogs from approved topics
+ * Scheduled cron job to automatically write blogs from ready topics
  * 
  * This endpoint should be called by Netlify's scheduled functions or an external cron service
  * 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient();
 
-    // Atomically claim the next approved topic. Uses FOR UPDATE SKIP LOCKED
+    // Atomically claim the next ready topic. Uses FOR UPDATE SKIP LOCKED
     // so concurrent cron runs cannot claim the same topic (prevents duplicate writes).
     const { data: claimedTopics, error: claimError } = await supabase
       .rpc("claim_next_approved_topic");
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     if (!topic) {
       return NextResponse.json({
         success: true,
-        message: "No approved topics to process",
+        message: "No ready topics to process",
         processed: 0,
       });
     }
@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
       try {
         await getAdminClient()
           .from("blog_topics")
-          .update({ status: "approved" }) // Reset so it can be retried
+          .update({ status: "ready" }) // Reset so it can be retried
           .eq("id", topicId);
       } catch (updateError) {
         console.error("Failed to update topic error status:", updateError);

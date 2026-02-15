@@ -1,5 +1,5 @@
 export type TopicSource = "user" | "ai";
-export type TopicStatus = "suggested" | "approved" | "in_progress" | "completed" | "rejected";
+export type TopicStatus = "preparing" | "ready" | "in_progress" | "completed";
 export type DraftStatus = "draft" | "review" | "scheduled" | "published" | "failed";
 
 export interface TopicImage {
