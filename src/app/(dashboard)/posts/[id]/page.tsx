@@ -88,7 +88,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     setSaving(true);
 
     try {
-      const completeness = calculateCompleteness(draft);
       await draftsApi.update(draft.id, {
         title: draft.title,
         slug: draft.slug,
@@ -100,7 +99,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         status: draft.status,
         scheduled_date: draft.scheduled_date,
         scheduled_publish_at: draft.scheduled_publish_at,
-        completeness,
       });
       setLastSaved(new Date().toLocaleTimeString());
     } catch (err) {
