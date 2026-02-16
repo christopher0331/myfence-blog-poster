@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { createBlogPR, commitBlogDirectly } from "@/lib/github";
+import { sanitizeMdxBody } from "@/lib/utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
         .from("blog_drafts")
         .update({
           title: blogPost.title,
-          body_mdx: blogPost.content,
+          body_mdx: sanitizeMdxBody(blogPost.content),
           meta_description: blogPost.metaDescription,
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
         .insert({
           title: blogPost.title,
           slug,
-          body_mdx: blogPost.content,
+          body_mdx: sanitizeMdxBody(blogPost.content),
           meta_description: blogPost.metaDescription,
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
@@ -176,8 +177,8 @@ export async function POST(req: NextRequest) {
           bp.showArticleSummary !== undefined ? `showArticleSummary: ${bp.showArticleSummary}` : null,
         ].filter(Boolean);
         const frontmatter = frontmatterLines.join("\n");
-
-        const mdxContent = `${frontmatter}\n\n${blogPost.content}`;
+        const body = sanitizeMdxBody(blogPost.content);
+        const mdxContent = `${frontmatter}\n\n${body}`;
 
         // Commit directly to main branch
         const { commitUrl } = await commitBlogDirectly({
