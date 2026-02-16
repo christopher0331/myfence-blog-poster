@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 
 const navItems = [
+  { href: "/topics", label: "Research Topics", icon: Lightbulb },
   { href: "/", label: "Scheduled Posts", icon: Calendar },
   { href: "/posts", label: "All Posts", icon: FileText },
-  { href: "/topics", label: "Research Topics", icon: Lightbulb },
-  { href: "/feedback", label: "Client Feedback", icon: MessageSquare },
+  { href: "/feedback", label: "Feedback", icon: MessageSquare },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
