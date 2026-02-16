@@ -76,9 +76,12 @@ export default function DashboardPage() {
 
   const getDaysUntil = (dateString: string | null) => {
     if (!dateString) return null;
-    const date = new Date(dateString);
+    const target = new Date(dateString);
     const now = new Date();
-    const diff = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    // Compare calendar dates in local timezone, not raw milliseconds
+    const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diff = Math.round((targetDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return diff;
   };
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { sanitizeMdxBody } from "@/lib/utils";
+import { publishScheduledDrafts } from "@/lib/publish-scheduled";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -57,10 +58,22 @@ export async function GET(request: NextRequest) {
       : null;
 
     if (!topic) {
+      // No topics to write, but still check for scheduled drafts to publish
+      let publishResult;
+      try {
+        publishResult = await publishScheduledDrafts();
+        if (publishResult.published > 0) {
+          console.log(`[Cron] Published scheduled draft: ${publishResult.message}`);
+        }
+      } catch (pubErr: any) {
+        console.error("[Cron] Publish scheduled error (non-fatal):", pubErr.message);
+      }
+
       return NextResponse.json({
         success: true,
         message: "No ready topics to process",
         processed: 0,
+        scheduledPublish: publishResult || null,
       });
     }
 
@@ -179,12 +192,24 @@ export async function GET(request: NextRequest) {
       slug,
     };
 
+    // Also check for any scheduled drafts ready to publish
+    let publishResult;
+    try {
+      publishResult = await publishScheduledDrafts();
+      if (publishResult.published > 0) {
+        console.log(`[Cron] Also published scheduled draft: ${publishResult.message}`);
+      }
+    } catch (pubErr: any) {
+      console.error("[Cron] Publish scheduled error (non-fatal):", pubErr.message);
+    }
+
     return NextResponse.json({
       success: true,
       message: `Successfully wrote blog post: ${result.title}`,
       processed: 1,
       topicId: topic.id,
       ...result,
+      scheduledPublish: publishResult || null,
     });
   } catch (error: any) {
     console.error("Cron job error:", error);
@@ -200,11 +225,23 @@ export async function GET(request: NextRequest) {
         console.error("Failed to update topic error status:", updateError);
       }
     }
+
+    // Even if writing failed, still try to publish any scheduled drafts
+    let publishResult;
+    try {
+      publishResult = await publishScheduledDrafts();
+      if (publishResult.published > 0) {
+        console.log(`[Cron] Published scheduled draft despite write error: ${publishResult.message}`);
+      }
+    } catch (pubErr: any) {
+      console.error("[Cron] Publish scheduled error (non-fatal):", pubErr.message);
+    }
     
     return NextResponse.json(
       {
         success: false,
         error: error.message || "Failed to process cron job",
+        scheduledPublish: publishResult || null,
       },
       { status: 500 }
     );

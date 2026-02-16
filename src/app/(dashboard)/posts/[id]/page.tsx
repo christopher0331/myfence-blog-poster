@@ -223,17 +223,23 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
             <Save className="h-4 w-4 mr-2" />
             {saving ? "Saving..." : "Save"}
           </Button>
-          {draft.status !== "published" && draft.scheduled_publish_at && (
-            <Button
-              onClick={() => {
-                updateField("status", "scheduled");
-                setTimeout(saveDraft, 100);
-              }}
-              disabled={draft.status === "scheduled"}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {draft.status === "scheduled" ? "Scheduled" : "Schedule Post"}
-            </Button>
+          {draft.status !== "published" && (
+            draft.status === "scheduled" ? (
+              <Badge variant="success" className="px-4 py-2 text-sm">
+                <Calendar className="h-4 w-4 mr-1 inline" />
+                Scheduled
+              </Badge>
+            ) : draft.scheduled_publish_at ? (
+              <Button
+                onClick={() => {
+                  updateField("status", "scheduled");
+                  setTimeout(saveDraft, 100);
+                }}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Schedule Post
+              </Button>
+            ) : null
           )}
           <Button
             onClick={publishToGitHub}
