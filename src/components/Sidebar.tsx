@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   FileText,
@@ -34,9 +34,13 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
 
-  // Close mobile drawer when route changes
+  // Close mobile drawer when route changes (not when mobileOpen toggles)
+  const prevPathname = useRef(pathname);
   useEffect(() => {
-    if (mobileOpen && onMobileClose) onMobileClose();
+    if (prevPathname.current !== pathname) {
+      prevPathname.current = pathname;
+      if (mobileOpen && onMobileClose) onMobileClose();
+    }
   }, [pathname, mobileOpen, onMobileClose]);
 
   const content = (
