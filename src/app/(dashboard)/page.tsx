@@ -21,21 +21,19 @@ export default function DashboardPage() {
         const now = new Date().toISOString();
         const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        // Get scheduled posts
+        // Get all scheduled posts
         const scheduledData = await draftsApi.getAll({
           status: "scheduled",
-          scheduledDateNotNull: true,
-          order: "scheduled_date",
+          order: "scheduled_publish_at",
           ascending: true,
         });
 
-        // Get upcoming posts (next 7 days)
-        const upcomingData = await draftsApi.getAll({
-          status: "scheduled",
-          scheduledDateGte: now,
-          scheduledDateLte: nextWeek,
-          order: "scheduled_date",
-          ascending: true,
+        // Get upcoming posts (next 7 days) — filter client-side
+        const upcomingData = scheduledData.filter((d) => {
+          const pubDate = d.scheduled_publish_at;
+          if (!pubDate) return false;
+          const t = new Date(pubDate).getTime();
+          return t >= Date.now() && t <= Date.now() + 7 * 24 * 60 * 60 * 1000;
         });
 
         setScheduled(scheduledData);

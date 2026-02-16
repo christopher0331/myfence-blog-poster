@@ -385,10 +385,24 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                   </label>
                   <Input
                     type="datetime-local"
-                    value={draft.scheduled_publish_at ? draft.scheduled_publish_at.slice(0, 16) : ""}
+                    value={
+                      draft.scheduled_publish_at
+                        ? (() => {
+                            const d = new Date(draft.scheduled_publish_at);
+                            const y = d.getFullYear();
+                            const mo = String(d.getMonth() + 1).padStart(2, "0");
+                            const day = String(d.getDate()).padStart(2, "0");
+                            const h = String(d.getHours()).padStart(2, "0");
+                            const mi = String(d.getMinutes()).padStart(2, "0");
+                            return `${y}-${mo}-${day}T${h}:${mi}`;
+                          })()
+                        : ""
+                    }
                     onChange={(e) => {
                       const val = e.target.value;
                       if (val) {
+                        // val is "YYYY-MM-DDTHH:MM" in local time.
+                        // new Date(val) treats it as local, .toISOString() sends UTC to the DB.
                         updateField("scheduled_publish_at", new Date(val).toISOString());
                         if (draft.status === "draft" || draft.status === "review") {
                           updateField("status", "scheduled");
