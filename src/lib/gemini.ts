@@ -278,19 +278,15 @@ export async function investigateTopic(idea: string): Promise<InvestigateTopicRe
 
   const prompt = `You are a content strategist for a fence company blog (MyFence.com) in Seattle/Pacific Northwest.
 
-The user has this topic idea: "${idea}"
+The user has this topic idea: "${idea.replace(/"/g, "'")}"
 
-Do quick research and suggest:
-1. A clear, SEO-friendly article title (under 70 chars)
-2. A brief description (2-3 sentences) of what the article will cover and why it matters to homeowners
-3. A short list of 3-6 keywords for SEO
+Respond with valid JSON only. No markdown, no code fences, no extra text.
+- suggestedTitle: one clear SEO-friendly article title, under 70 characters
+- description: 2-3 sentences on what the article will cover (escape any quotes inside as \\")
+- keywords: array of 3-6 SEO keywords
 
-Respond with JSON only:
-{
-  "suggestedTitle": "Article title here",
-  "description": "Brief description of what the article will cover...",
-  "keywords": ["keyword1", "keyword2", "keyword3"]
-}`;
+Example:
+{"suggestedTitle":"Your Title Here","description":"Short description. Second sentence.","keywords":["keyword1","keyword2","keyword3"]}`;
 
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
@@ -312,13 +308,40 @@ Respond with JSON only:
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Invalid Gemini response");
 
-  let jsonText = text.trim().replace(/^```json?\n?/, "").replace(/\n?```$/, "");
-  const parsed = JSON.parse(jsonText);
-  return {
-    suggestedTitle: parsed.suggestedTitle || idea,
-    description: parsed.description || "",
-    keywords: Array.isArray(parsed.keywords) ? parsed.keywords : [],
+  let jsonText = text.trim().replace(/^```json?\n?/i, "").replace(/\n?```\s*$/, "").trim();
+
+  const fallbackResult: InvestigateTopicResult = {
+    suggestedTitle: idea.slice(0, 70),
+    description: "AI research could not be parsed. You can edit the title and description below.",
+    keywords: [],
   };
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    return {
+      suggestedTitle: String(parsed.suggestedTitle ?? idea).slice(0, 70),
+      description: String(parsed.description ?? ""),
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String) : [],
+    };
+  } catch {
+    // Try to extract a JSON object from the response (model may have added text or truncated)
+    const firstBrace = jsonText.indexOf("{");
+    const lastBrace = jsonText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        const extracted = jsonText.slice(firstBrace, lastBrace + 1);
+        const parsed = JSON.parse(extracted);
+        return {
+          suggestedTitle: String(parsed.suggestedTitle ?? idea).slice(0, 70),
+          description: String(parsed.description ?? ""),
+          keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(String) : [],
+        };
+      } catch {
+        // Fall through to fallback
+      }
+    }
+    return fallbackResult;
+  }
 }
 
 /**
