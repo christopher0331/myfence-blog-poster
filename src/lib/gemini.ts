@@ -64,42 +64,49 @@ Keywords to focus on: ${keywordsList}${researchContext}${scopeContext}${imagesCo
 
 CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, professional output:
 
-1. CONTENT STRUCTURE:
+1. AVOID WALLS OF TEXT (very important):
+   - Keep paragraphs SHORT: 2–4 sentences maximum. Break long explanations into multiple short paragraphs or into lists.
+   - Never write a long "list" as bolded phrases followed by long sentences on the same line. Always use real markdown lists.
+   - For any set of rules, steps, or options: use bullet lists (- item) or numbered lists (1. step). Do not use bold headings as fake list items with paragraphs underneath.
+   - After every 2–3 paragraphs, add a visual break: a short Callout, a list, a table, or a subheading. Avoid more than 3 paragraphs in a row without a break.
+
+2. CONTENT STRUCTURE:
    - Use ## for main sections (e.g., "The Foundation of Your Fence Investment")
    - Use ### for sub-sections
-   - Bold key terms and phrases within paragraphs (e.g., **fencing installation**, **Enhanced Privacy**)
-   - Use numbered lists for steps or sequential info (1., 2., 3.)
-   - Use bullet lists for feature lists or options
+   - Bold key terms within paragraphs (e.g., **fencing installation**, **Enhanced Privacy**)
+   - Use numbered lists (1., 2., 3.) for steps or sequential info
+   - Use bullet lists (- item) for feature lists, options, or rule summaries
+   - For regulatory/process sections (e.g. permits, height limits): lead with 1–2 short sentences, then use a bullet or numbered list for the actual rules/steps
 
-2. COMPARISON TABLES:
+3. COMPARISON TABLES:
    - When comparing two or more options (e.g., steel vs wood, options A vs B), include a markdown table:
    | Feature | Option A | Option B |
    |---------|----------|----------|
    | Cost | $X | $Y |
    - Tables will render in a polished Card with proper styling
 
-3. CALLOUT BOXES - Use ONLY the exact component name <Callout>:
+4. CALLOUT BOXES - Use ONLY the exact component name <Callout>:
    - Use <Callout title="Real-world failure">...explanation...</Callout> for warnings or key takeaways
    - Use <Callout title="Pro tip" variant="success">...tip...</Callout> for positive tips
    - Use <Callout title="Important" variant="info">...info...</Callout> for general notes
    - NEVER use ProTip, ProTtip, or any other name - only <Callout>
    - Place callouts after relevant paragraphs or image descriptions
 
-4. IMAGES (strict format):
+5. IMAGES (strict format):
    - Every image MUST use exactly: ![Alt text here](url) — opening bracket [ after !, then closing ], then (url). Never use ! without brackets (e.g. "!Alt text" is wrong).
    - Example: ![Cedar fence in Seattle backyard](https://example.com/cedar-fence.jpg)
    - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line (authors can add ImageGrid manually if needed)
    - Suggest a featured_image URL if relevant (e.g., product photo, hero image). Use a placeholder like "/images/hero-placeholder.jpg" if no specific image
 
-5. IMAGE CAPTIONS:
+6. IMAGE CAPTIONS:
    - If using a product or vendor image, suggest imageCaption: "Image courtesy of [Vendor Name]" with optional link
 
-6. LAYOUT:
+7. LAYOUT:
    - Use layout: "centered" for comparison/guide posts (title centered, hero image below, Article Summary box)
    - Use layout: "two-column" for how-to or narrative posts (title + image side-by-side)
    - Set showArticleSummary: true for longer posts (1000+ words) to enable AI summary CTA
 
-7. METADATA:
+8. METADATA:
    - category: One of "Pricing", "Materials", "Legal", "Maintenance", "Installation", "Fence Posts", "DIY", "Design"
    - readTime: Estimate based on word count (e.g., "8 min read")
    - metaDescription: 120-160 characters, SEO-optimized
