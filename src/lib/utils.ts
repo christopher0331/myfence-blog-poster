@@ -32,12 +32,18 @@ function extractContentFromJsonBlock(content: string): string | null {
  * - If body is raw JSON with a "content" field, extract that markdown first.
  * - Strip leaked JSON/metadata lines (layout:, showArticleSummary:, etc.)
  * - Remove broken image lines (!Alt text without brackets/url)
+ * - Remove leading # Title line (title is already in frontmatter, duplicating it looks bad)
  */
 export function sanitizeMdxBody(content: string): string {
   if (!content || typeof content !== "string") return content;
   let body = content;
   const extracted = extractContentFromJsonBlock(body);
   if (extracted) body = extracted;
+
+  // Strip a leading H1 title line — the title is rendered from frontmatter,
+  // so having it again as the first line of the body creates a duplicate.
+  body = body.replace(/^\s*#\s+[^\n]+\n*/, "");
+
   return body
     .split("\n")
     .filter((line) => {
