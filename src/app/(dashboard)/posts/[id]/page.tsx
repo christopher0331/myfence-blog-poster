@@ -225,23 +225,25 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
             <Save className="h-4 w-4 mr-2" />
             {saving ? "Saving..." : "Save"}
           </Button>
-          <Button
-            onClick={() => {
-              updateField("status", "review");
-              setTimeout(saveDraft, 100);
-            }}
-            disabled={draft.status === "published"}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Submit for Review
-          </Button>
+          {draft.status !== "published" && draft.scheduled_publish_at && (
+            <Button
+              onClick={() => {
+                updateField("status", "scheduled");
+                setTimeout(saveDraft, 100);
+              }}
+              disabled={draft.status === "scheduled"}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              {draft.status === "scheduled" ? "Scheduled" : "Schedule Post"}
+            </Button>
+          )}
           <Button
             onClick={publishToGitHub}
             disabled={publishing || !draft.title || !draft.body_mdx}
             variant="default"
           >
             <Github className="h-4 w-4 mr-2" />
-            {publishing ? "Publishing..." : "Publish to GitHub"}
+            {publishing ? "Publishing..." : "Publish Now"}
           </Button>
         </div>
       </div>
