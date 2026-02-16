@@ -6,13 +6,39 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * If body is or starts with a ```json { "content": "..." } block, extract the markdown.
+ * Prevents raw Gemini JSON from being published as article body.
+ * Handles truncated JSON (content string may run to end of file).
+ */
+function extractContentFromJsonBlock(content: string): string | null {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("```") && !trimmed.startsWith('{"')) return null;
+  const contentMatch = trimmed.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"?\s*[\s\S]*/);
+  if (!contentMatch) return null;
+  try {
+    let inner = contentMatch[1]
+      .replace(/\\n/g, "\n")
+      .replace(/\\"/g, '"')
+      .trim();
+    inner = inner.replace(/\s*```\s*$/, "").trim();
+    return inner || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Sanitize MDX body content so published articles match preview quality.
+ * - If body is raw JSON with a "content" field, extract that markdown first.
  * - Strip leaked JSON/metadata lines (layout:, showArticleSummary:, etc.)
  * - Remove broken image lines (!Alt text without brackets/url)
  */
 export function sanitizeMdxBody(content: string): string {
   if (!content || typeof content !== "string") return content;
-  return content
+  let body = content;
+  const extracted = extractContentFromJsonBlock(body);
+  if (extracted) body = extracted;
+  return body
     .split("\n")
     .filter((line) => {
       const t = line.trim();
