@@ -1,32 +1,41 @@
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 
 /**
- * NextAuth v5 configuration with Google OAuth.
- * Only allows sign-in from authorized emails.
+ * NextAuth v5 configuration with simple credentials login.
  */
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    Credentials({
+      name: "credentials",
+      credentials: {
+        username: { label: "Username", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const username = credentials?.username as string;
+        const password = credentials?.password as string;
+
+        if (username === "admin" && password === "myfence26") {
+          return {
+            id: "1",
+            name: "Admin",
+            email: "admin@myfence.com",
+          };
+        }
+        return null;
+      },
     }),
   ],
   pages: {
     signIn: "/login",
   },
+  session: {
+    strategy: "jwt",
+  },
   callbacks: {
     authorized({ auth: session }) {
-      // Require authentication for all pages
       return !!session?.user;
-    },
-    async signIn({ user }) {
-      // Optional: restrict to specific email addresses
-      const allowedEmails = process.env.ALLOWED_EMAILS?.split(",").map((e) => e.trim());
-      if (allowedEmails && allowedEmails.length > 0) {
-        return allowedEmails.includes(user.email || "");
-      }
-      return true;
     },
   },
 });
