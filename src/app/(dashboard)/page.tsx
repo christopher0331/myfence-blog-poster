@@ -50,6 +50,10 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
+  /** Prefer scheduled_publish_at (has time), fall back to scheduled_date */
+  const getPublishDate = (post: BlogDraft) =>
+    post.scheduled_publish_at || post.scheduled_date || null;
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "—";
     const date = new Date(dateString);
@@ -60,10 +64,13 @@ export default function DashboardPage() {
     });
   };
 
-  const formatTime = (dateString: string | null) => {
-    if (!dateString) return "";
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
     });
@@ -123,7 +130,7 @@ export default function DashboardPage() {
               <h2 className="text-xl font-semibold mb-4">Upcoming This Week</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {upcoming.map((post) => {
-                  const daysUntil = getDaysUntil(post.scheduled_date);
+                  const daysUntil = getDaysUntil(getPublishDate(post));
                   return (
                     <Card
                       key={post.id}
@@ -164,7 +171,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              <span>{formatDate(post.scheduled_date)}</span>
+                              <span>{formatDateTime(getPublishDate(post))}</span>
                             </div>
                             {post.read_time && (
                               <div className="flex items-center gap-1">
@@ -194,7 +201,7 @@ export default function DashboardPage() {
             </h2>
             <div className="space-y-3">
               {scheduled.map((post) => {
-                const daysUntil = getDaysUntil(post.scheduled_date);
+                const daysUntil = getDaysUntil(getPublishDate(post));
                 return (
                   <Card
                     key={post.id}
@@ -236,7 +243,7 @@ export default function DashboardPage() {
                                 </Badge>
                               )}
                               <Badge variant="outline">
-                                {formatDate(post.scheduled_date)}
+                                {formatDateTime(getPublishDate(post))}
                               </Badge>
                             </div>
                           </div>

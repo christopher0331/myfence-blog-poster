@@ -99,6 +99,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         read_time: draft.read_time,
         status: draft.status,
         scheduled_date: draft.scheduled_date,
+        scheduled_publish_at: draft.scheduled_publish_at,
         completeness,
       });
       setLastSaved(new Date().toLocaleTimeString());
@@ -380,13 +381,28 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
                 <div>
                   <label className="text-sm font-medium mb-1 block">
                     <Calendar className="inline h-3 w-3 mr-1" />
-                    Schedule Date
+                    Publish Date & Time
                   </label>
                   <Input
-                    type="date"
-                    value={draft.scheduled_date || ""}
-                    onChange={(e) => updateField("scheduled_date", e.target.value || null)}
+                    type="datetime-local"
+                    value={draft.scheduled_publish_at ? draft.scheduled_publish_at.slice(0, 16) : ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        updateField("scheduled_publish_at", new Date(val).toISOString());
+                        if (draft.status === "draft" || draft.status === "review") {
+                          updateField("status", "scheduled");
+                        }
+                      } else {
+                        updateField("scheduled_publish_at", null);
+                      }
+                    }}
                   />
+                  {draft.scheduled_publish_at && draft.status === "scheduled" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Will auto-publish at this time
+                    </p>
+                  )}
                 </div>
               </div>
               <div>

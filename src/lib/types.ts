@@ -43,6 +43,7 @@ export interface BlogDraft {
     structured_data: number;
   };
   scheduled_date: string | null;
+  scheduled_publish_at: string | null;
   published_at: string | null;
   github_pr_url: string | null;
   created_at: string;

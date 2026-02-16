@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
-import { commitBlogDirectly } from "@/lib/github";
 import { sanitizeMdxBody } from "@/lib/utils";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -130,7 +129,7 @@ export async function GET(request: NextRequest) {
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
           topic_id: topic.id,
-          status: "scheduled",
+          status: "draft",
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingDraft.id)
@@ -153,7 +152,7 @@ export async function GET(request: NextRequest) {
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
           topic_id: topic.id,
-          status: "scheduled",
+          status: "draft",
         })
         .select()
         .single();
@@ -164,108 +163,20 @@ export async function GET(request: NextRequest) {
       draftId = newDraft.id;
     }
 
-    // Commit directly to GitHub
-    let githubUrl: string | null = null;
-    try {
-      // Update progress: Committing to GitHub
-      await supabase
-        .from("blog_topics")
-        .update({ progress_status: "Committing to GitHub repository..." })
-        .eq("id", topic.id);
-      
-      console.log(`[Cron] Committing to GitHub: ${slug}`);
-      // Build MDX content with frontmatter (matching src/content/blog/*.mdx format)
-      const today = new Date().toISOString().split("T")[0];
-      const publishDate = new Date().toLocaleDateString("en-US", {
-        month: "long",
-        year: "numeric",
-      });
+    // Mark topic as completed — article has been written.
+    // The draft stays as "draft" until the user reviews and publishes it manually
+    // via the "Publish to GitHub" button in the post editor.
+    await supabase
+      .from("blog_topics")
+      .update({ status: "completed" })
+      .eq("id", topic.id);
 
-      // Get featured image from draft if available
-      const { data: draftData } = await supabase
-        .from("blog_drafts")
-        .select("featured_image")
-        .eq("id", draftId)
-        .single();
-
-      const imageValue = draftData?.featured_image || "";
-      
-      // Build keywords from topic keywords if available
-      const keywords = topic.keywords && topic.keywords.length > 0
-        ? topic.keywords.join(", ")
-        : undefined;
-
-      const frontmatterLines = [
-        "---",
-        `title: "${blogPost.title.replace(/"/g, '\\"')}"`,
-        `description: "${blogPost.metaDescription.replace(/"/g, '\\"')}"`,
-        `slug: "${slug}"`,
-        `category: "${blogPost.category || ""}"`,
-      ];
-
-      // Add image only if it exists
-      if (imageValue) {
-        frontmatterLines.push(`image: "${imageValue.replace(/"/g, '\\"')}"`);
-      }
-
-      frontmatterLines.push(
-        `readTime: "${blogPost.readTime || "5 min read"}"`,
-        `publishDate: "${publishDate}"`,
-        `datePublished: "${today}"`,
-        `dateModified: "${today}"`
-      );
-
-      // Add keywords only if they exist
-      if (keywords) {
-        frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
-      }
-
-      frontmatterLines.push("---");
-      const frontmatter = frontmatterLines.join("\n");
-      const body = sanitizeMdxBody(blogPost.content);
-      const mdxContent = `${frontmatter}\n\n${body}`;
-
-      // Commit directly to main branch
-      const { commitUrl } = await commitBlogDirectly({
-        slug,
-        mdxContent,
-        title: blogPost.title,
-        commitMessage: `Auto-generated blog: ${blogPost.title}`,
-      });
-
-      githubUrl = commitUrl;
-      console.log(`[Cron] Successfully committed to GitHub: ${commitUrl}`);
-
-      // Update draft with GitHub URL
-      await supabase
-        .from("blog_drafts")
-        .update({
-          github_pr_url: commitUrl,
-          status: "published",
-          published_at: new Date().toISOString(),
-        })
-        .eq("id", draftId);
-
-      // Mark topic as completed (only status - progress_status column may not exist)
-      await supabase
-        .from("blog_topics")
-        .update({ status: "completed" })
-        .eq("id", topic.id);
-    } catch (githubError: any) {
-      console.error("[Cron] GitHub commit error:", githubError);
-      // Mark as completed since draft was created (progress_status column may not exist)
-      await supabase
-        .from("blog_topics")
-        .update({ status: "completed" })
-        .eq("id", topic.id);
-      // Don't fail the whole request if GitHub fails, but log it
-    }
+    console.log(`[Cron] Draft saved (id: ${draftId}). Awaiting manual publish.`);
 
     const result = {
       draftId,
       title: blogPost.title,
       slug,
-      githubUrl,
     };
 
     return NextResponse.json({
