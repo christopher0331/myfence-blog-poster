@@ -85,8 +85,9 @@ CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, profession
    - NEVER use ProTip, ProTtip, or any other name - only <Callout>
    - Place callouts after relevant paragraphs or image descriptions
 
-4. IMAGES:
-   - Use standard markdown: ![Alt text describing image](https://example.com/image.jpg)
+4. IMAGES (strict format):
+   - Every image MUST use exactly: ![Alt text here](url) — opening bracket [ after !, then closing ], then (url). Never use ! without brackets (e.g. "!Alt text" is wrong).
+   - Example: ![Cedar fence in Seattle backyard](https://example.com/cedar-fence.jpg)
    - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line (authors can add ImageGrid manually if needed)
    - Suggest a featured_image URL if relevant (e.g., product photo, hero image). Use a placeholder like "/images/hero-placeholder.jpg" if no specific image
 
@@ -210,9 +211,18 @@ Start writing now. Output valid JSON only.`;
 
     try {
       const parsed = JSON.parse(jsonText);
+      // Ensure we use the article body, never the raw JSON string
+      let content = parsed.content ?? parsed.body ?? "";
+      if (typeof content !== "string" || content.trim().length === 0) {
+        content = generatedText;
+      }
+      if (content.trimStart().startsWith("{")) {
+        // Accidentally got raw JSON as content; use a safe fallback
+        content = `# ${parsed.title || topic}\n\nArticle content could not be extracted. Please retry.`;
+      }
       return {
         title: parsed.title || topic,
-        content: parsed.content || generatedText,
+        content,
         metaDescription: parsed.metaDescription || `Learn about ${topic.toLowerCase()}`,
         category: parsed.category,
         readTime: parsed.readTime || "5 min read",
@@ -222,15 +232,18 @@ Start writing now. Output valid JSON only.`;
         showArticleSummary: parsed.showArticleSummary,
       };
     } catch (parseError) {
-      // If JSON parsing fails, extract title and use full text as content
-      const lines = generatedText.split("\n");
-      const titleMatch = generatedText.match(/title["\s:]+"([^"]+)"/i) || 
+      // If JSON parsing fails, do not use raw JSON as body
+      const titleMatch = generatedText.match(/title["\s:]+"([^"]+)"/i) ||
                         generatedText.match(/#\s+(.+)/);
-      const title = titleMatch ? titleMatch[1] : topic;
+      const title = titleMatch ? titleMatch[1].trim() : topic;
+      const isLikelyJson = generatedText.trimStart().startsWith("{");
+      const content = isLikelyJson
+        ? `# ${title}\n\nResponse was not valid JSON. Please try writing this topic again.`
+        : generatedText;
 
       return {
         title,
-        content: generatedText,
+        content,
         metaDescription: `Learn about ${topic.toLowerCase()}`,
         readTime: "5 min read",
       };
