@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Plus, Search, FileText, Calendar, Clock } from "lucide-react";
+import { Plus, Search, FileText, Calendar, Clock, Image as ImageIcon } from "lucide-react";
 import { draftsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { BlogDraft } from "@/lib/types";
@@ -95,146 +95,199 @@ export default function PostsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">All Posts</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">All Posts</h1>
+          <p className="text-muted-foreground mt-1">
             {drafts.length} posts total
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search..."
-              className="pl-9 h-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button onClick={createNewDraft} size="sm" className="h-9 shrink-0">
-            <Plus className="h-4 w-4 mr-1" />
-            New
-          </Button>
-        </div>
+        <Button onClick={createNewDraft} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
+          <Plus className="h-4 w-4 mr-2" />
+          New Post
+        </Button>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by title, slug, or category..."
+          className="pl-10"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">Loading posts...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <FileText className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground mb-4">
-            {search ? "No posts match your search" : "No posts yet"}
-          </p>
-          {!search && (
-            <Button onClick={createNewDraft} size="sm">
-              <Plus className="h-4 w-4 mr-1" /> Create Post
-            </Button>
-          )}
-        </div>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No posts found</h3>
+            <p className="text-muted-foreground mb-4">
+              {search ? "Try a different search term" : "Create your first blog post to get started"}
+            </p>
+            {!search && (
+              <Button onClick={createNewDraft}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Post
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {groups.map((group) => (
             <div key={group.key}>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+              <h2 className="text-xl font-semibold mb-4">
                 {group.label} ({group.items.length})
               </h2>
-              <div className="border rounded-lg divide-y bg-card">
-                {group.items.map((post) => {
-                  const overall = calcOverall(post);
-                  return (
-                    <div
-                      key={post.id}
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors group"
-                      onClick={() => router.push(`/posts/${post.id}`)}
-                    >
-                      {/* Completeness ring */}
-                      <div className="w-10 h-10 shrink-0 relative flex items-center justify-center">
-                        <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                          <circle
-                            cx="18" cy="18" r="15.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            className="text-muted/40"
-                          />
-                          <circle
-                            cx="18" cy="18" r="15.5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeDasharray={`${overall * 0.974} 100`}
-                            strokeLinecap="round"
-                            className={cn(
-                              overall >= 80 ? "text-green-500" :
-                              overall >= 50 ? "text-yellow-500" : "text-red-400"
-                            )}
-                          />
-                        </svg>
-                        <span className="absolute text-[10px] font-bold">{overall}</span>
-                      </div>
-
-                      {/* Title + meta */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
-                            {post.title || "Untitled Post"}
-                          </span>
-                          <Badge variant={statusVariant(post.status)} className="text-[10px] px-1.5 py-0 shrink-0">
-                            {post.status}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                          {post.category && (
-                            <span className="truncate">{post.category}</span>
-                          )}
-                          <span className="truncate">/blog/{post.slug}</span>
-                        </div>
-                      </div>
-
-                      {/* Right-side metadata */}
-                      <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                        {post.read_time && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {post.read_time}
-                          </div>
-                        )}
-                        {post.scheduled_publish_at && post.status === "scheduled" && (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(post.scheduled_publish_at).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        )}
-                        {post.published_at && (
-                          <span>
-                            {new Date(post.published_at).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        )}
-                        <span className="text-muted-foreground/60 w-20 text-right">
-                          {new Date(post.updated_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="space-y-3">
+                {group.items.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    statusVariant={statusVariant}
+                    onClick={() => router.push(`/posts/${post.id}`)}
+                  />
+                ))}
               </div>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function PostCard({
+  post,
+  statusVariant,
+  onClick,
+}: {
+  post: BlogDraft;
+  statusVariant: (s: string) => "success" | "warning" | "default" | "destructive" | "secondary";
+  onClick: () => void;
+}) {
+  const overall = calcOverall(post);
+
+  return (
+    <Card
+      className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50"
+      onClick={onClick}
+    >
+      <CardContent className="p-5">
+        <div className="flex items-start gap-4">
+          {/* Thumbnail */}
+          {post.featured_image ? (
+            <div className="relative w-28 h-20 flex-shrink-0 rounded-lg overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={post.featured_image}
+                alt={post.title || "Post image"}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ) : (
+            <div className="w-28 h-20 flex-shrink-0 bg-muted rounded-lg flex items-center justify-center">
+              <ImageIcon className="h-7 w-7 text-muted-foreground/30" />
+            </div>
+          )}
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            {/* Title row */}
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-semibold text-base sm:text-lg line-clamp-1">
+                {post.title || "Untitled Post"}
+              </h3>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge variant={statusVariant(post.status)} className="text-xs">
+                  {post.status}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Meta description */}
+            {post.meta_description && (
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {post.meta_description}
+              </p>
+            )}
+
+            {/* Bottom metadata row */}
+            <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
+              {/* Completeness */}
+              <div className="flex items-center gap-1.5">
+                <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      overall >= 80 ? "bg-green-500" :
+                      overall >= 50 ? "bg-yellow-500" : "bg-red-400"
+                    )}
+                    style={{ width: `${overall}%` }}
+                  />
+                </div>
+                <span className={cn(
+                  "font-medium",
+                  overall >= 80 ? "text-green-600" :
+                  overall >= 50 ? "text-yellow-600" : "text-red-500"
+                )}>
+                  {overall}%
+                </span>
+              </div>
+
+              {post.category && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {post.category}
+                </Badge>
+              )}
+
+              <span className="hidden sm:inline truncate">/blog/{post.slug}</span>
+
+              {post.read_time && (
+                <div className="hidden sm:flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>{post.read_time}</span>
+                </div>
+              )}
+
+              {post.scheduled_publish_at && post.status === "scheduled" && (
+                <div className="hidden sm:flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  <span>
+                    {new Date(post.scheduled_publish_at).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+
+              {post.published_at && (
+                <span className="hidden sm:inline">
+                  Published {new Date(post.published_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              )}
+
+              <span className="ml-auto text-muted-foreground/50 hidden sm:inline">
+                Updated {new Date(post.updated_at).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
