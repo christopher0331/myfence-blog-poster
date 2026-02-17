@@ -67,8 +67,10 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         data.completeness = freshCompleteness;
         setDraft(data);
 
-        // Persist the freshly calculated completeness to the DB
-        await draftsApi.update(id, { completeness: freshCompleteness });
+        // Persist completeness to DB (fire-and-forget, don't block or redirect on failure)
+        draftsApi.update(id, { completeness: freshCompleteness }).catch((err) => {
+          console.warn("Failed to persist completeness:", err);
+        });
       } catch (err) {
         console.error("Failed to load draft:", err);
         router.push("/posts");
