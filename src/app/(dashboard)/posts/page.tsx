@@ -2,15 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Search, Image as ImageIcon, Calendar, Clock, FileText, CheckCircle, Circle, AlertCircle } from "lucide-react";
+import { Plus, Search, FileText, Calendar, Clock } from "lucide-react";
 import { draftsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { BlogDraft } from "@/lib/types";
+
+function calcOverall(post: BlogDraft): number {
+  const scores = [
+    post.title?.trim() ? 100 : 0,
+    post.body_mdx?.trim()
+      ? post.body_mdx.length > 2000
+        ? 100
+        : Math.round((post.body_mdx.length / 2000) * 100)
+      : 0,
+    post.meta_description?.trim()
+      ? post.meta_description.length >= 120
+        ? 100
+        : Math.round((post.meta_description.length / 120) * 100)
+      : 0,
+    post.featured_image?.trim() ? 100 : 0,
+    post.category?.trim() ? 100 : 0,
+    post.title && post.meta_description && post.category ? 100 : 0,
+  ];
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
 
 export default function PostsPage() {
   const router = useRouter();
@@ -49,7 +68,7 @@ export default function PostsPage() {
     }
   }
 
-  const statusColor = (status: string) => {
+  const statusVariant = (status: string) => {
     switch (status) {
       case "published": return "success" as const;
       case "scheduled": return "warning" as const;
@@ -66,259 +85,156 @@ export default function PostsPage() {
       d.category?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const groupedByStatus = {
-    scheduled: filtered.filter((d) => d.status === "scheduled"),
-    review: filtered.filter((d) => d.status === "review"),
-    draft: filtered.filter((d) => d.status === "draft"),
-    published: filtered.filter((d) => d.status === "published"),
-  };
+  const groups = [
+    { key: "scheduled", label: "Scheduled", items: filtered.filter((d) => d.status === "scheduled") },
+    { key: "review", label: "In Review", items: filtered.filter((d) => d.status === "review") },
+    { key: "draft", label: "Drafts", items: filtered.filter((d) => d.status === "draft") },
+    { key: "published", label: "Published", items: filtered.filter((d) => d.status === "published") },
+  ].filter((g) => g.items.length > 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">All Posts</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your blog content library
+          <h1 className="text-2xl font-bold">All Posts</h1>
+          <p className="text-sm text-muted-foreground">
+            {drafts.length} posts total
           </p>
         </div>
-        <Button onClick={createNewDraft} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
-          <Plus className="h-4 w-4 mr-2" />
-          New Post
-        </Button>
-      </div>
-
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search posts by title, slug, or category..."
-          className="pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              className="pl-9 h-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button onClick={createNewDraft} size="sm" className="h-9 shrink-0">
+            <Plus className="h-4 w-4 mr-1" />
+            New
+          </Button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Loading posts...</p>
-        </div>
+        <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No posts found</h3>
-            <p className="text-muted-foreground mb-4">
-              {search ? "Try a different search term" : "Create your first blog post to get started"}
-            </p>
-            {!search && (
-              <Button onClick={createNewDraft}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Post
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        <div className="text-center py-16">
+          <FileText className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground mb-4">
+            {search ? "No posts match your search" : "No posts yet"}
+          </p>
+          {!search && (
+            <Button onClick={createNewDraft} size="sm">
+              <Plus className="h-4 w-4 mr-1" /> Create Post
+            </Button>
+          )}
+        </div>
       ) : (
-        <div className="space-y-8">
-          {/* Scheduled Posts */}
-          {groupedByStatus.scheduled.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-4 text-muted-foreground">
-                Scheduled ({groupedByStatus.scheduled.length})
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <div key={group.key}>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+                {group.label} ({group.items.length})
               </h2>
-              <div className="space-y-3">
-                {groupedByStatus.scheduled.map((post) => (
-                  <PostRow key={post.id} post={post} onClick={() => router.push(`/posts/${post.id}`)} />
-                ))}
-              </div>
-            </div>
-          )}
+              <div className="border rounded-lg divide-y bg-card">
+                {group.items.map((post) => {
+                  const overall = calcOverall(post);
+                  return (
+                    <div
+                      key={post.id}
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors group"
+                      onClick={() => router.push(`/posts/${post.id}`)}
+                    >
+                      {/* Completeness ring */}
+                      <div className="w-10 h-10 shrink-0 relative flex items-center justify-center">
+                        <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                          <circle
+                            cx="18" cy="18" r="15.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            className="text-muted/40"
+                          />
+                          <circle
+                            cx="18" cy="18" r="15.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeDasharray={`${overall * 0.974} 100`}
+                            strokeLinecap="round"
+                            className={cn(
+                              overall >= 80 ? "text-green-500" :
+                              overall >= 50 ? "text-yellow-500" : "text-red-400"
+                            )}
+                          />
+                        </svg>
+                        <span className="absolute text-[10px] font-bold">{overall}</span>
+                      </div>
 
-          {/* In Review */}
-          {groupedByStatus.review.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-4 text-muted-foreground">
-                In Review ({groupedByStatus.review.length})
-              </h2>
-              <div className="space-y-3">
-                {groupedByStatus.review.map((post) => (
-                  <PostRow key={post.id} post={post} onClick={() => router.push(`/posts/${post.id}`)} />
-                ))}
-              </div>
-            </div>
-          )}
+                      {/* Title + meta */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                            {post.title || "Untitled Post"}
+                          </span>
+                          <Badge variant={statusVariant(post.status)} className="text-[10px] px-1.5 py-0 shrink-0">
+                            {post.status}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                          {post.category && (
+                            <span className="truncate">{post.category}</span>
+                          )}
+                          <span className="truncate">/blog/{post.slug}</span>
+                        </div>
+                      </div>
 
-          {/* Drafts */}
-          {groupedByStatus.draft.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-4 text-muted-foreground">
-                Drafts ({groupedByStatus.draft.length})
-              </h2>
-              <div className="space-y-3">
-                {groupedByStatus.draft.map((post) => (
-                  <PostRow key={post.id} post={post} onClick={() => router.push(`/posts/${post.id}`)} />
-                ))}
+                      {/* Right-side metadata */}
+                      <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                        {post.read_time && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {post.read_time}
+                          </div>
+                        )}
+                        {post.scheduled_publish_at && post.status === "scheduled" && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(post.scheduled_publish_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        )}
+                        {post.published_at && (
+                          <span>
+                            {new Date(post.published_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground/60 w-20 text-right">
+                          {new Date(post.updated_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          )}
-
-          {/* Published */}
-          {groupedByStatus.published.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-4 text-muted-foreground">
-                Published ({groupedByStatus.published.length})
-              </h2>
-              <div className="space-y-3">
-                {groupedByStatus.published.map((post) => (
-                  <PostRow key={post.id} post={post} onClick={() => router.push(`/posts/${post.id}`)} />
-                ))}
-              </div>
-            </div>
-          )}
+          ))}
         </div>
       )}
     </div>
-  );
-}
-
-function PostRow({ post, onClick }: { post: BlogDraft; onClick: () => void }) {
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "published": return "success" as const;
-      case "scheduled": return "warning" as const;
-      case "review": return "default" as const;
-      case "failed": return "destructive" as const;
-      default: return "secondary" as const;
-    }
-  };
-
-  const completenessFields = [
-    { label: "Title", key: "title", value: post.completeness?.title ?? 0 },
-    { label: "Body", key: "body", value: post.completeness?.body ?? 0 },
-    { label: "Meta", key: "meta_description", value: post.completeness?.meta_description ?? 0 },
-    { label: "Image", key: "image", value: post.completeness?.image ?? 0 },
-    { label: "Category", key: "category", value: post.completeness?.category ?? 0 },
-    { label: "Data", key: "structured_data", value: post.completeness?.structured_data ?? 0 },
-  ];
-
-  const overall = Math.round(
-    completenessFields.reduce((sum, f) => sum + f.value, 0) / completenessFields.length
-  );
-
-  // Strip markdown for preview (keep full length)
-  const contentPreview = post.body_mdx
-    ? post.body_mdx
-        .replace(/```[\s\S]*?```/g, "") // Remove code blocks
-        .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1") // Remove links but keep text
-        .replace(/#{1,6}\s+/g, "") // Remove headers
-        .replace(/\*\*([^\*]+)\*\*/g, "$1") // Remove bold
-        .replace(/\*([^\*]+)\*/g, "$1") // Remove italic
-        .trim()
-    : "";
-
-  return (
-    <Card
-      className="cursor-pointer hover:shadow-md transition-all hover:border-primary/50 group touch-manipulation"
-      onClick={onClick}
-    >
-      <CardContent className="p-0">
-        <div className="flex flex-col sm:flex-row gap-0 sm:gap-4">
-          {/* Completeness - compact on mobile, sidebar on desktop */}
-          <div className="sm:w-32 flex-shrink-0 border-b sm:border-b-0 sm:border-r bg-muted/30 p-4">
-            <div className="flex sm:flex-col items-center justify-between sm:items-stretch gap-2 sm:gap-3">
-              <div className="flex items-center gap-2 sm:justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Complete
-                </span>
-                <span
-                  className={cn(
-                    "text-sm font-bold",
-                    overall >= 80 ? "text-green-600" : overall >= 50 ? "text-yellow-600" : "text-red-500"
-                  )}
-                >
-                  {overall}%
-                </span>
-              </div>
-              <Progress value={overall} className="h-2 flex-1 sm:flex-initial max-w-[120px] sm:max-w-none" />
-              <div className="hidden sm:flex flex-col space-y-1.5">
-                {completenessFields.map((field) => (
-                  <div key={field.key} className="flex items-center gap-1.5 text-xs">
-                    {field.value >= 100 ? (
-                      <CheckCircle className="h-3 w-3 text-green-600 flex-shrink-0" />
-                    ) : field.value > 0 ? (
-                      <AlertCircle className="h-3 w-3 text-yellow-600 flex-shrink-0" />
-                    ) : (
-                      <Circle className="h-3 w-3 text-muted-foreground/40 flex-shrink-0" />
-                    )}
-                    <span className="text-muted-foreground truncate">{field.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="flex-1 p-4 space-y-3 min-w-0">
-            {/* Row 1: Post Details */}
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-3 border-b">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                  <h3 className="font-semibold text-base sm:text-lg truncate">
-                    {post.title || "Untitled Post"}
-                  </h3>
-                  <Badge variant={statusColor(post.status)} className="flex-shrink-0">
-                    {post.status}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground flex-wrap">
-                  {post.category && (
-                    <Badge variant="outline" className="text-xs">
-                      {post.category}
-                    </Badge>
-                  )}
-                  <span className="truncate">/blog/{post.slug}</span>
-                  {post.scheduled_date && (
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      <span>{new Date(post.scheduled_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                    </div>
-                  )}
-                  {post.read_time && (
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      <span>{post.read_time}</span>
-                    </div>
-                  )}
-                  {post.published_at && (
-                    <span className="text-muted-foreground">
-                      Published {new Date(post.published_at).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 2: Preview (Meta Description) */}
-            {post.meta_description && (
-              <div className="pb-3 border-b">
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {post.meta_description}
-                </p>
-              </div>
-            )}
-
-            {/* Row 3: Content Preview */}
-            {contentPreview && (
-              <div className="max-h-96 overflow-y-auto">
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {contentPreview}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
