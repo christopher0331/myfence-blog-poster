@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CompletenessTracker from "@/components/editor/CompletenessTracker";
 import MDXPreview from "@/components/editor/MDXPreview";
+import AIChatBar from "@/components/editor/AIChatBar";
 import { draftsApi } from "@/lib/api";
 import { ArrowLeft, Save, Send, Trash2, Calendar, Github } from "lucide-react";
 import type { BlogDraft, DraftStatus } from "@/lib/types";
@@ -39,19 +40,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await draftsApi.getById(id);
-        setDraft(data);
-      } catch (err) {
-        console.error("Failed to load draft:", err);
-        router.push("/posts");
-      }
-    }
-    load();
-  }, [id, router]);
-
   const calculateCompleteness = useCallback((d: BlogDraft) => {
     return {
       title: d.title?.trim() ? 100 : 0,
@@ -71,6 +59,24 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     };
   }, []);
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await draftsApi.getById(id);
+        const freshCompleteness = calculateCompleteness(data);
+        data.completeness = freshCompleteness;
+        setDraft(data);
+
+        // Persist the freshly calculated completeness to the DB
+        await draftsApi.update(id, { completeness: freshCompleteness });
+      } catch (err) {
+        console.error("Failed to load draft:", err);
+        router.push("/posts");
+      }
+    }
+    load();
+  }, [id, router, calculateCompleteness]);
+
   const updateField = useCallback(
     (field: string, value: any) => {
       setDraft((prev) => {
@@ -88,6 +94,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     setSaving(true);
 
     try {
+      const freshCompleteness = calculateCompleteness(draft);
       await draftsApi.update(draft.id, {
         title: draft.title,
         slug: draft.slug,
@@ -99,6 +106,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         status: draft.status,
         scheduled_date: draft.scheduled_date,
         scheduled_publish_at: draft.scheduled_publish_at,
+        completeness: freshCompleteness,
       });
       setLastSaved(new Date().toLocaleTimeString());
     } catch (err) {
@@ -251,6 +259,16 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
           </Button>
         </div>
       </div>
+
+      {/* AI Editor Chat Bar */}
+      {draft.status !== "published" && (
+        <AIChatBar
+          bodyMdx={draft.body_mdx}
+          title={draft.title}
+          metaDescription={draft.meta_description}
+          onApplyEdit={(newContent) => updateField("body_mdx", newContent)}
+        />
+      )}
 
       {/* Editor Layout: Completeness sidebar on left (desktop) / top (mobile), then rows */}
       <div className="flex flex-col lg:flex-row gap-6">

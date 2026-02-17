@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { commitBlogDirectly } from "@/lib/github";
+import { notifyPostPublished } from "@/lib/notify";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -154,6 +155,13 @@ export async function POST(request: NextRequest) {
         published_at: new Date().toISOString(),
       })
       .eq("id", draftId);
+
+    await notifyPostPublished({
+      title: draft.title,
+      slug: draft.slug,
+      commitUrl,
+      scheduledPublish: false,
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { commitBlogDirectly } from "@/lib/github";
 import { sanitizeMdxBody } from "@/lib/utils";
+import { notifyPostPublished } from "@/lib/notify";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -124,6 +125,13 @@ export async function publishScheduledDrafts(): Promise<PublishResult> {
     .eq("id", draft.id);
 
   console.log(`[Publish] Successfully published: ${commitUrl}`);
+
+  await notifyPostPublished({
+    title: draft.title,
+    slug: draft.slug,
+    commitUrl,
+    scheduledPublish: true,
+  });
 
   return {
     published: 1,
