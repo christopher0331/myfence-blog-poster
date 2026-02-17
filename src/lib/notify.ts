@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const NOTIFY_EMAILS = ["admin@reactivlabs.com", "info@myfence.com"];
+const NOTIFY_EMAILS = ["info@myfence.com"];
 const FROM_EMAIL = "MyFence Studio <notifications@reactivlabs.com>";
 
 interface PublishNotification {
