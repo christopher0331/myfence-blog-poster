@@ -63,14 +63,8 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     async function load() {
       try {
         const data = await draftsApi.getById(id);
-        const freshCompleteness = calculateCompleteness(data);
-        data.completeness = freshCompleteness;
+        data.completeness = calculateCompleteness(data);
         setDraft(data);
-
-        // Persist completeness to DB (fire-and-forget, don't block or redirect on failure)
-        draftsApi.update(id, { completeness: freshCompleteness }).catch((err) => {
-          console.warn("Failed to persist completeness:", err);
-        });
       } catch (err) {
         console.error("Failed to load draft:", err);
         router.push("/posts");
@@ -96,7 +90,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     setSaving(true);
 
     try {
-      const freshCompleteness = calculateCompleteness(draft);
       await draftsApi.update(draft.id, {
         title: draft.title,
         slug: draft.slug,
@@ -108,7 +101,6 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         status: draft.status,
         scheduled_date: draft.scheduled_date,
         scheduled_publish_at: draft.scheduled_publish_at,
-        completeness: freshCompleteness,
       });
       setLastSaved(new Date().toLocaleTimeString());
     } catch (err) {

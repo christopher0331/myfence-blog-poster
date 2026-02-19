@@ -28,6 +28,12 @@ interface GeminiBlogResponse {
   showArticleSummary?: boolean;
 }
 
+function buildFallbackMeta(topic: string): string {
+  const clean = topic.replace(/[^a-zA-Z0-9\s,&'-]/g, " ").replace(/\s+/g, " ").trim();
+  const base = `Expert guide to ${clean.toLowerCase()} for Seattle & PNW homeowners.`;
+  return base.length > 160 ? base.slice(0, 157).trimEnd() + "..." : base;
+}
+
 /**
  * Generates a blog post using Google Gemini API
  */
@@ -230,7 +236,7 @@ Start writing now. Output valid JSON only.`;
       return {
         title: parsed.title || topic,
         content,
-        metaDescription: parsed.metaDescription || `Learn about ${topic.toLowerCase()}`,
+        metaDescription: parsed.metaDescription || buildFallbackMeta(topic),
         category: parsed.category,
         readTime: parsed.readTime || "5 min read",
         featuredImage: parsed.featuredImage,
@@ -251,7 +257,7 @@ Start writing now. Output valid JSON only.`;
       return {
         title,
         content,
-        metaDescription: `Learn about ${topic.toLowerCase()}`,
+        metaDescription: buildFallbackMeta(topic),
         readTime: "5 min read",
       };
     }
