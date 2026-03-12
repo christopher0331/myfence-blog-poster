@@ -3,6 +3,7 @@ import { analyzeCompetitorContent } from "@/lib/competitor-analysis";
 import { createClient } from "@supabase/supabase-js";
 import type { TopicStatus } from "@/lib/types";
 
+export const runtime = "edge";
 export const maxDuration = 60;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
