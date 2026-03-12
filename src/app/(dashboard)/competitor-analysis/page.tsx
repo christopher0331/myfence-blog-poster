@@ -18,6 +18,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { competitorApi } from "@/lib/api";
+import CompetitorChat from "@/components/CompetitorChat";
 import type {
   CompetitorAnalysisResult,
   CompetitorOpportunity,
@@ -118,6 +119,71 @@ export default function CompetitorAnalysisPage() {
       setCreating(false);
     }
   };
+
+  const handleChatAction = useCallback(
+    (action: { type: string; urls?: string[]; url?: string; changes?: Partial<CompetitorOpportunity> }) => {
+      switch (action.type) {
+        case "select":
+          setSelected((prev) => {
+            const next = new Set(prev);
+            (action.urls || []).forEach((u) => next.add(u));
+            return next;
+          });
+          break;
+        case "deselect":
+          setSelected((prev) => {
+            const next = new Set(prev);
+            (action.urls || []).forEach((u) => next.delete(u));
+            return next;
+          });
+          break;
+        case "select_all_gaps":
+          if (result) {
+            const all = new Set<string>();
+            result.opportunities.forEach((o) => {
+              if (!o.alreadyCovered) all.add(o.competitorUrl);
+            });
+            setSelected(all);
+          }
+          break;
+        case "deselect_all":
+          setSelected(new Set());
+          break;
+        case "update":
+          if (result && action.url && action.changes) {
+            setResult({
+              ...result,
+              opportunities: result.opportunities.map((o) =>
+                o.competitorUrl === action.url
+                  ? { ...o, ...action.changes }
+                  : o,
+              ),
+            });
+          }
+          break;
+        case "remove":
+          if (result) {
+            const removeSet = new Set(action.urls || []);
+            const filtered = result.opportunities.filter(
+              (o) => !removeSet.has(o.competitorUrl),
+            );
+            setResult({
+              ...result,
+              opportunities: filtered,
+              gaps: filtered.filter((o) => !o.alreadyCovered).length,
+              alreadyCovered: filtered.filter((o) => o.alreadyCovered).length,
+            });
+            setSelected((prev) => {
+              const next = new Set(prev);
+              removeSet.forEach((u) => next.delete(u));
+              return next;
+            });
+          }
+          break;
+      }
+    },
+    [result],
+  );
 
   const gaps = result?.opportunities.filter((o) => !o.alreadyCovered) || [];
   const covered = result?.opportunities.filter((o) => o.alreadyCovered) || [];
@@ -421,6 +487,13 @@ export default function CompetitorAnalysisPage() {
               Analyze Another Competitor
             </Button>
           </div>
+
+          {/* AI Chat Assistant */}
+          <CompetitorChat
+            opportunities={result.opportunities}
+            selectedUrls={Array.from(selected)}
+            onAction={handleChatAction}
+          />
         </>
       )}
     </div>
