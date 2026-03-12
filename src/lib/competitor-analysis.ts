@@ -145,7 +145,7 @@ export function filterContentPages(rows: SemrushRow[]): SemrushRow[] {
 
 // ── Cross-reference with existing blog ─────────────────────────────────
 
-async function getExistingSlugs(): Promise<string[]> {
+export async function getExistingSlugs(): Promise<string[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) return [];
@@ -164,21 +164,14 @@ async function getExistingSlugs(): Promise<string[]> {
 
 // ── Gemini Analysis ────────────────────────────────────────────────────
 
-export async function analyzeCompetitorContent(
-  csvText: string,
-): Promise<AnalysisResult> {
-  const allRows = parseSemrushCSV(csvText);
-  const contentRows = filterContentPages(allRows);
-  const existingSlugs = await getExistingSlugs();
-
-  const competitor = allRows[0]?.url
-    ? new URL(allRows[0].url).hostname
-    : "unknown";
-
+export async function analyzeWithGemini(
+  contentRows: SemrushRow[],
+  existingSlugs: string[],
+  competitor: string,
+): Promise<AnalysisOpportunity[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  // Build a compact representation for Gemini
   const competitorSummary = contentRows.slice(0, 40).map((r) => ({
     url: r.url,
     slug: r.slug,
@@ -257,14 +250,26 @@ Return ONLY valid JSON array, no markdown fences:
     jsonText = jsonText.slice(firstBracket, lastBracket + 1);
   }
 
-  let opportunities: AnalysisOpportunity[];
   try {
-    opportunities = JSON.parse(jsonText);
+    return JSON.parse(jsonText);
   } catch {
     throw new Error("Failed to parse Gemini analysis response");
   }
+}
 
-  // Sort: uncovered first, then by traffic descending
+export async function analyzeCompetitorContent(
+  csvText: string,
+): Promise<AnalysisResult> {
+  const allRows = parseSemrushCSV(csvText);
+  const contentRows = filterContentPages(allRows);
+  const existingSlugs = await getExistingSlugs();
+
+  const competitor = allRows[0]?.url
+    ? new URL(allRows[0].url).hostname
+    : "unknown";
+
+  const opportunities = await analyzeWithGemini(contentRows, existingSlugs, competitor);
+
   opportunities.sort((a, b) => {
     if (a.alreadyCovered !== b.alreadyCovered) return a.alreadyCovered ? 1 : -1;
     return b.estimatedTraffic - a.estimatedTraffic;

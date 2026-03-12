@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeCompetitorContent } from "@/lib/competitor-analysis";
+import {
+  parseSemrushCSV,
+  filterContentPages,
+  analyzeWithGemini,
+  getExistingSlugs,
+} from "@/lib/competitor-analysis";
 import { createClient } from "@supabase/supabase-js";
 import type { TopicStatus } from "@/lib/types";
 
 export const runtime = "edge";
-export const maxDuration = 60;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -16,16 +20,44 @@ function getAdminClient() {
   });
 }
 
+function ndjsonStream(
+  generator: (send: (data: Record<string, unknown>) => void) => Promise<void>,
+) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+      };
+      try {
+        await generator(send);
+      } catch (err: any) {
+        send({ event: "error", error: err.message || "Unknown error" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-cache",
+      "Transfer-Encoding": "chunked",
+    },
+  });
+}
+
 /**
  * POST /api/competitor-analysis
- * Accepts SEMrush CSV text, returns gap analysis with prioritized opportunities.
+ * Streams NDJSON progress events for the analyze action.
+ * Returns regular JSON for create-topics.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { csvText, action, opportunities } = body;
 
-    // Action: analyze — parse CSV + run Gemini analysis
     if (action === "analyze" || (!action && csvText)) {
       if (!csvText || typeof csvText !== "string") {
         return NextResponse.json(
@@ -34,11 +66,54 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const result = await analyzeCompetitorContent(csvText);
-      return NextResponse.json({ success: true, ...result });
+      return ndjsonStream(async (send) => {
+        send({ event: "progress", step: "parsing", message: "Parsing CSV..." });
+
+        const allRows = parseSemrushCSV(csvText);
+        const contentRows = filterContentPages(allRows);
+        const competitor = allRows[0]?.url
+          ? new URL(allRows[0].url).hostname
+          : "unknown";
+
+        send({
+          event: "progress",
+          step: "fetching",
+          message: `Found ${contentRows.length} content pages. Fetching existing blog posts...`,
+        });
+
+        const existingSlugs = await getExistingSlugs();
+
+        send({
+          event: "progress",
+          step: "analyzing",
+          message: `Analyzing ${Math.min(contentRows.length, 40)} pages with AI. This may take 15-30 seconds...`,
+        });
+
+        const opportunities = await analyzeWithGemini(
+          contentRows,
+          existingSlugs,
+          competitor,
+        );
+
+        opportunities.sort((a, b) => {
+          if (a.alreadyCovered !== b.alreadyCovered)
+            return a.alreadyCovered ? 1 : -1;
+          return b.estimatedTraffic - a.estimatedTraffic;
+        });
+
+        send({
+          event: "complete",
+          success: true,
+          competitor,
+          totalPages: allRows.length,
+          contentPages: contentRows.length,
+          opportunities,
+          alreadyCovered: opportunities.filter((o) => o.alreadyCovered).length,
+          gaps: opportunities.filter((o) => !o.alreadyCovered).length,
+        });
+      });
     }
 
-    // Action: create-topics — bulk-create topics from selected opportunities
     if (action === "create-topics") {
       if (!Array.isArray(opportunities) || opportunities.length === 0) {
         return NextResponse.json(
@@ -51,10 +126,8 @@ export async function POST(req: NextRequest) {
       const created: string[] = [];
 
       for (const opp of opportunities) {
-        // Skip already-covered topics
         if (opp.alreadyCovered) continue;
 
-        // Check if topic with similar title already exists
         const { data: existing } = await supabase
           .from("blog_topics")
           .select("id")
@@ -63,7 +136,8 @@ export async function POST(req: NextRequest) {
 
         if (existing && existing.length > 0) continue;
 
-        const status: TopicStatus = opp.priority === "high" ? "ready" : "preparing";
+        const status: TopicStatus =
+          opp.priority === "high" ? "ready" : "preparing";
 
         const { data, error } = await supabase
           .from("blog_topics")
@@ -74,7 +148,12 @@ export async function POST(req: NextRequest) {
             research_notes: `Competitor gap from ${opp.competitorUrl}\nEstimated traffic: ${opp.estimatedTraffic}\nCompetitor keywords: ${opp.competitorKeywordCount}`,
             source: "ai" as const,
             status,
-            priority: opp.priority === "high" ? 9 : opp.priority === "medium" ? 6 : 3,
+            priority:
+              opp.priority === "high"
+                ? 9
+                : opp.priority === "medium"
+                  ? 6
+                  : 3,
           })
           .select("id")
           .single();

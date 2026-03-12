@@ -25,6 +25,7 @@ import type {
 
 export default function CompetitorAnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string | null>(null);
   const [result, setResult] = useState<CompetitorAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -34,16 +35,18 @@ export default function CompetitorAnalysisPage() {
 
   const processCSV = useCallback(async (csvText: string) => {
     setAnalyzing(true);
+    setProgressMsg("Starting analysis...");
     setError(null);
     setResult(null);
     setSelected(new Set());
     setCreatedCount(null);
 
     try {
-      const data = await competitorApi.analyze(csvText);
+      const data = await competitorApi.analyze(csvText, (msg) => {
+        setProgressMsg(msg);
+      });
       setResult(data);
 
-      // Auto-select all uncovered high/medium priority opportunities
       const autoSelect = new Set<string>();
       data.opportunities.forEach((opp) => {
         if (!opp.alreadyCovered && opp.priority !== "low") {
@@ -55,6 +58,7 @@ export default function CompetitorAnalysisPage() {
       setError(err.message || "Analysis failed");
     } finally {
       setAnalyzing(false);
+      setProgressMsg(null);
     }
   }, []);
 
@@ -201,8 +205,7 @@ export default function CompetitorAnalysisPage() {
               Analyzing competitor content...
             </h3>
             <p className="text-muted-foreground">
-              Parsing CSV, cross-referencing your blog, and identifying
-              opportunities with AI. This may take 15-30 seconds.
+              {progressMsg || "Starting analysis..."}
             </p>
           </CardContent>
         </Card>

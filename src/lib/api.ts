@@ -132,17 +132,59 @@ export const topicsApi = {
 
 // Competitor Analysis API
 export const competitorApi = {
-  async analyze(csvText: string): Promise<CompetitorAnalysisResult> {
+  async analyze(
+    csvText: string,
+    onProgress?: (message: string) => void,
+  ): Promise<CompetitorAnalysisResult> {
     const response = await fetch(`${API_BASE}/competitor-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "analyze", csvText }),
     });
+
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.error || "Analysis failed");
     }
-    return response.json();
+
+    if (!response.body) {
+      return response.json();
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: CompetitorAnalysisResult | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.event === "progress" && onProgress) {
+            onProgress(msg.message);
+          } else if (msg.event === "error") {
+            throw new Error(msg.error);
+          } else if (msg.event === "complete") {
+            result = msg as CompetitorAnalysisResult;
+          }
+        } catch (e: any) {
+          if (e.message && e.message !== "Unexpected end of JSON input") {
+            throw e;
+          }
+        }
+      }
+    }
+
+    if (!result) throw new Error("No result received from analysis");
+    return result;
   },
 
   async createTopics(
