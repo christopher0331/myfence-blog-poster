@@ -168,7 +168,7 @@ export const competitorApi = {
         if (!line.trim()) continue;
         try {
           const msg = JSON.parse(line);
-          if (msg.event === "progress" && onProgress) {
+          if ((msg.event === "progress" || msg.event === "ping") && onProgress) {
             onProgress(msg.message);
           } else if (msg.event === "error") {
             throw new Error(msg.error);

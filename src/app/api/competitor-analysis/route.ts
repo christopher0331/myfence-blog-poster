@@ -20,13 +20,15 @@ function getAdminClient() {
   });
 }
 
+type SendFn = (data: Record<string, unknown>) => void;
+
 function ndjsonStream(
-  generator: (send: (data: Record<string, unknown>) => void) => Promise<void>,
+  generator: (send: SendFn) => Promise<void>,
 ) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (data: Record<string, unknown>) => {
+      const send: SendFn = (data) => {
         controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
       };
       try {
@@ -43,9 +45,23 @@ function ndjsonStream(
     headers: {
       "Content-Type": "application/x-ndjson",
       "Cache-Control": "no-cache",
-      "Transfer-Encoding": "chunked",
     },
   });
+}
+
+function withKeepalive<T>(
+  promise: Promise<T>,
+  send: SendFn,
+  message: string,
+  intervalMs = 3000,
+): Promise<T> {
+  let seconds = 0;
+  const timer = setInterval(() => {
+    seconds += Math.round(intervalMs / 1000);
+    send({ event: "ping", message: `${message} (${seconds}s elapsed)` });
+  }, intervalMs);
+
+  return promise.finally(() => clearInterval(timer));
 }
 
 /**
@@ -86,13 +102,13 @@ export async function POST(req: NextRequest) {
         send({
           event: "progress",
           step: "analyzing",
-          message: `Analyzing ${Math.min(contentRows.length, 40)} pages with AI. This may take 15-30 seconds...`,
+          message: `Analyzing ${Math.min(contentRows.length, 40)} pages with AI...`,
         });
 
-        const opportunities = await analyzeWithGemini(
-          contentRows,
-          existingSlugs,
-          competitor,
+        const opportunities = await withKeepalive(
+          analyzeWithGemini(contentRows, existingSlugs, competitor),
+          send,
+          "AI is analyzing competitor content",
         );
 
         opportunities.sort((a, b) => {
