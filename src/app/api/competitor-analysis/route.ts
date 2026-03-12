@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  parseSemrushCSV,
-  filterContentPages,
-  analyzeWithGemini,
-  getExistingSlugs,
-} from "@/lib/competitor-analysis";
+import { analyzeCompetitorContent } from "@/lib/competitor-analysis";
 import { createClient } from "@supabase/supabase-js";
 import type { TopicStatus } from "@/lib/types";
-
-export const runtime = "edge";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -20,54 +13,10 @@ function getAdminClient() {
   });
 }
 
-type SendFn = (data: Record<string, unknown>) => void;
-
-function ndjsonStream(
-  generator: (send: SendFn) => Promise<void>,
-) {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send: SendFn = (data) => {
-        controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
-      };
-      try {
-        await generator(send);
-      } catch (err: any) {
-        send({ event: "error", error: err.message || "Unknown error" });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson",
-      "Cache-Control": "no-cache",
-    },
-  });
-}
-
-function withKeepalive<T>(
-  promise: Promise<T>,
-  send: SendFn,
-  message: string,
-  intervalMs = 3000,
-): Promise<T> {
-  let seconds = 0;
-  const timer = setInterval(() => {
-    seconds += Math.round(intervalMs / 1000);
-    send({ event: "ping", message: `${message} (${seconds}s elapsed)` });
-  }, intervalMs);
-
-  return promise.finally(() => clearInterval(timer));
-}
-
 /**
  * POST /api/competitor-analysis
- * Streams NDJSON progress events for the analyze action.
- * Returns regular JSON for create-topics.
+ * - analyze: parse CSV + cross-reference with existing blog (fast, no AI)
+ * - create-topics: bulk-create topics from selected opportunities
  */
 export async function POST(req: NextRequest) {
   try {
@@ -82,52 +31,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      return ndjsonStream(async (send) => {
-        send({ event: "progress", step: "parsing", message: "Parsing CSV..." });
-
-        const allRows = parseSemrushCSV(csvText);
-        const contentRows = filterContentPages(allRows);
-        const competitor = allRows[0]?.url
-          ? new URL(allRows[0].url).hostname
-          : "unknown";
-
-        send({
-          event: "progress",
-          step: "fetching",
-          message: `Found ${contentRows.length} content pages. Fetching existing blog posts...`,
-        });
-
-        const existingSlugs = await getExistingSlugs();
-
-        send({
-          event: "progress",
-          step: "analyzing",
-          message: `Analyzing ${Math.min(contentRows.length, 40)} pages with AI...`,
-        });
-
-        const opportunities = await withKeepalive(
-          analyzeWithGemini(contentRows, existingSlugs, competitor),
-          send,
-          "AI is analyzing competitor content",
-        );
-
-        opportunities.sort((a, b) => {
-          if (a.alreadyCovered !== b.alreadyCovered)
-            return a.alreadyCovered ? 1 : -1;
-          return b.estimatedTraffic - a.estimatedTraffic;
-        });
-
-        send({
-          event: "complete",
-          success: true,
-          competitor,
-          totalPages: allRows.length,
-          contentPages: contentRows.length,
-          opportunities,
-          alreadyCovered: opportunities.filter((o) => o.alreadyCovered).length,
-          gaps: opportunities.filter((o) => !o.alreadyCovered).length,
-        });
-      });
+      const result = await analyzeCompetitorContent(csvText);
+      return NextResponse.json({ success: true, ...result });
     }
 
     if (action === "create-topics") {

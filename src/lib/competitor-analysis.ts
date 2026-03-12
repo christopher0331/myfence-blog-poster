@@ -68,21 +68,17 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
-/**
- * Pages that are NOT content/blog articles — filter these out.
- * Matches homepages, location/city pages, category index, contact, etc.
- */
 const NON_CONTENT_PATTERNS = [
-  /^https?:\/\/[^/]+\/?(\?.*)?$/,              // homepage (with or without query params)
+  /^https?:\/\/[^/]+\/?(\?.*)?$/,
   /\/(reviews|contact|about|careers|faq|privacy|terms|warranty|financing|projects|instant-estimate)\/?$/i,
   /\/category\//i,
-  /\/blog\/?\d*\/?$/i,                          // /blog/ index or paginated /blog/4/
+  /\/blog\/?\d*\/?$/i,
   /\/page\/\d+/i,
-  /\?utm_/i,                                     // tracking-param variants of pages
+  /\?utm_/i,
   /\/(residential|commercial).*landing\/?$/i,
-  /-fence-company\/?$/i,                         // location service pages
-  /-fence-experts\/?$/i,                         // location service pages
-  /\/(portland|seattle)\/?(\?.*)?$/i,            // city landing pages
+  /-fence-company\/?$/i,
+  /-fence-experts\/?$/i,
+  /\/(portland|seattle)\/?(\?.*)?$/i,
 ];
 
 function isContentPage(url: string): boolean {
@@ -143,9 +139,32 @@ export function filterContentPages(rows: SemrushRow[]): SemrushRow[] {
     .sort((a, b) => b.traffic - a.traffic);
 }
 
+// ── Slug-to-title conversion ────────────────────────────────────────────
+
+function slugToTitle(slug: string): string {
+  const lastSegment = slug.split("/").pop() || slug;
+  return lastSegment
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+function extractKeywordsFromSlug(slug: string): string[] {
+  const lastSegment = slug.split("/").pop() || slug;
+  return lastSegment
+    .split(/[-_]/)
+    .filter((w) => w.length > 2)
+    .slice(0, 6);
+}
+
 // ── Cross-reference with existing blog ─────────────────────────────────
 
-export async function getExistingSlugs(): Promise<string[]> {
+interface ExistingPost {
+  slug: string;
+  title: string;
+}
+
+async function getExistingPosts(): Promise<ExistingPost[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) return [];
@@ -159,119 +178,96 @@ export async function getExistingSlugs(): Promise<string[]> {
     .select("slug, title, status")
     .in("status", ["draft", "review", "scheduled", "published"]);
 
-  return (data || []).map((d: any) => d.slug as string);
-}
-
-// ── Gemini Analysis ────────────────────────────────────────────────────
-
-export async function analyzeWithGemini(
-  contentRows: SemrushRow[],
-  existingSlugs: string[],
-  competitor: string,
-): Promise<AnalysisOpportunity[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  const competitorSummary = contentRows.slice(0, 40).map((r) => ({
-    url: r.url,
-    slug: r.slug,
-    traffic: r.traffic,
-    keywords: r.keywords,
-    infoTraffic: r.infoTraffic,
-    trend: r.trafficChange > 50 ? "growing" : r.trafficChange < -50 ? "declining" : "stable",
+  return (data || []).map((d: any) => ({
+    slug: d.slug as string,
+    title: (d.title as string) || "",
   }));
-
-  const prompt = `You are an SEO content strategist for MyFence.com, a fence company blog targeting Seattle/Pacific Northwest homeowners.
-
-COMPETITOR DATA (from SEMrush for ${competitor}):
-${JSON.stringify(competitorSummary, null, 2)}
-
-OUR EXISTING BLOG SLUGS (myfence.com/blog/...):
-${JSON.stringify(existingSlugs)}
-
-TASK:
-Analyze each competitor content page and determine:
-1. Whether we already have an equivalent article (match by topic, not exact slug)
-2. For gaps (topics we DON'T cover): suggest a title, description, and keywords we should write about
-3. Prioritize by traffic opportunity — high traffic + informational intent = high priority
-
-For each competitor page, return a JSON object. Focus on the TOP opportunities we should write FIRST.
-
-IMPORTANT RULES:
-- Skip location/city service pages, review pages, and non-article content
-- For pages we already cover, set alreadyCovered: true and include our matching slug
-- For gaps, suggest titles localized to Seattle/PNW (not Houston/Texas/San Antonio)
-- Priority: "high" = traffic > 200 or keywords > 100, "medium" = traffic > 50, "low" = rest
-- suggestedKeywords should be 3-6 SEO keywords relevant to the topic
-
-Return ONLY valid JSON array, no markdown fences:
-[
-  {
-    "competitorUrl": "...",
-    "competitorSlug": "...",
-    "suggestedTitle": "...",
-    "suggestedDescription": "2-3 sentence article scope",
-    "suggestedKeywords": ["kw1", "kw2"],
-    "estimatedTraffic": 123,
-    "infoTraffic": 100,
-    "competitorKeywordCount": 50,
-    "trafficTrend": "growing|stable|declining",
-    "priority": "high|medium|low",
-    "alreadyCovered": false,
-    "existingSlug": null
-  }
-]`;
-
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Gemini API: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Empty response from Gemini");
-
-  let jsonText = text.trim().replace(/^```json?\n?/i, "").replace(/\n?```\s*$/, "").trim();
-  const firstBracket = jsonText.indexOf("[");
-  const lastBracket = jsonText.lastIndexOf("]");
-  if (firstBracket !== -1 && lastBracket > firstBracket) {
-    jsonText = jsonText.slice(firstBracket, lastBracket + 1);
-  }
-
-  try {
-    return JSON.parse(jsonText);
-  } catch {
-    throw new Error("Failed to parse Gemini analysis response");
-  }
 }
+
+function normalizeForMatch(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+}
+
+function findMatchingPost(
+  competitorSlug: string,
+  existingPosts: ExistingPost[],
+): ExistingPost | null {
+  const compWords = normalizeForMatch(competitorSlug);
+  if (compWords.length === 0) return null;
+
+  let bestMatch: ExistingPost | null = null;
+  let bestScore = 0;
+
+  for (const post of existingPosts) {
+    const postWords = [
+      ...normalizeForMatch(post.slug),
+      ...normalizeForMatch(post.title),
+    ];
+    const overlap = compWords.filter((w) => postWords.includes(w)).length;
+    const score = overlap / Math.max(compWords.length, 1);
+
+    if (score > bestScore && score >= 0.4) {
+      bestScore = score;
+      bestMatch = post;
+    }
+  }
+
+  return bestMatch;
+}
+
+// ── Fast analysis (no AI) ───────────────────────────────────────────────
 
 export async function analyzeCompetitorContent(
   csvText: string,
 ): Promise<AnalysisResult> {
   const allRows = parseSemrushCSV(csvText);
   const contentRows = filterContentPages(allRows);
-  const existingSlugs = await getExistingSlugs();
+  const existingPosts = await getExistingPosts();
 
   const competitor = allRows[0]?.url
     ? new URL(allRows[0].url).hostname
     : "unknown";
 
-  const opportunities = await analyzeWithGemini(contentRows, existingSlugs, competitor);
+  const opportunities: AnalysisOpportunity[] = contentRows
+    .slice(0, 50)
+    .map((row) => {
+      const match = findMatchingPost(row.slug, existingPosts);
+      const trend: AnalysisOpportunity["trafficTrend"] =
+        row.trafficChange > 50
+          ? "growing"
+          : row.trafficChange < -50
+            ? "declining"
+            : "stable";
+      const priority: AnalysisOpportunity["priority"] =
+        row.traffic > 200 || row.keywords > 100
+          ? "high"
+          : row.traffic > 50
+            ? "medium"
+            : "low";
+
+      return {
+        competitorUrl: row.url,
+        competitorSlug: row.slug,
+        suggestedTitle: slugToTitle(row.slug),
+        suggestedDescription: `Competitor page with ${row.traffic} estimated monthly traffic and ${row.keywords} ranking keywords.`,
+        suggestedKeywords: extractKeywordsFromSlug(row.slug),
+        estimatedTraffic: row.traffic,
+        infoTraffic: row.infoTraffic,
+        competitorKeywordCount: row.keywords,
+        trafficTrend: trend,
+        priority,
+        alreadyCovered: !!match,
+        existingSlug: match?.slug,
+      };
+    });
 
   opportunities.sort((a, b) => {
-    if (a.alreadyCovered !== b.alreadyCovered) return a.alreadyCovered ? 1 : -1;
+    if (a.alreadyCovered !== b.alreadyCovered)
+      return a.alreadyCovered ? 1 : -1;
     return b.estimatedTraffic - a.estimatedTraffic;
   });
 

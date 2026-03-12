@@ -25,7 +25,6 @@ import type {
 
 export default function CompetitorAnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
-  const [progressMsg, setProgressMsg] = useState<string | null>(null);
   const [result, setResult] = useState<CompetitorAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -35,16 +34,13 @@ export default function CompetitorAnalysisPage() {
 
   const processCSV = useCallback(async (csvText: string) => {
     setAnalyzing(true);
-    setProgressMsg("Starting analysis...");
     setError(null);
     setResult(null);
     setSelected(new Set());
     setCreatedCount(null);
 
     try {
-      const data = await competitorApi.analyze(csvText, (msg) => {
-        setProgressMsg(msg);
-      });
+      const data = await competitorApi.analyze(csvText);
       setResult(data);
 
       const autoSelect = new Set<string>();
@@ -58,7 +54,6 @@ export default function CompetitorAnalysisPage() {
       setError(err.message || "Analysis failed");
     } finally {
       setAnalyzing(false);
-      setProgressMsg(null);
     }
   }, []);
 
@@ -148,8 +143,8 @@ export default function CompetitorAnalysisPage() {
           Competitor Analysis
         </h1>
         <p className="text-muted-foreground mt-1">
-          Upload a SEMrush organic pages report to find content gaps and
-          generate topics automatically
+          Upload a SEMrush organic pages report to find content gaps and create
+          topics for AI writing
         </p>
       </div>
 
@@ -202,10 +197,10 @@ export default function CompetitorAnalysisPage() {
           <CardContent className="p-16 text-center">
             <Loader2 className="h-12 w-12 mx-auto text-primary animate-spin mb-4" />
             <h3 className="text-lg font-semibold mb-2">
-              Analyzing competitor content...
+              Parsing competitor data...
             </h3>
             <p className="text-muted-foreground">
-              {progressMsg || "Starting analysis..."}
+              Filtering content pages and cross-referencing with your blog.
             </p>
           </CardContent>
         </Card>
