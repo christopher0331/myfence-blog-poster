@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBlogPR } from "@/lib/github";
+import { commitBlogDirectly } from "@/lib/github";
+import { buildMdxFile } from "@/lib/frontmatter";
+import { notifyPostPublished } from "@/lib/notify";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -10,16 +12,14 @@ function getAdminClient() {
     throw new Error("SUPABASE_SECRET_KEY is not set");
   }
   return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 }
 
 /**
  * POST /api/publish
- * Takes a draft ID, generates the MDX file with frontmatter, and creates a GitHub PR.
+ * Commits a draft directly to the main branch on GitHub.
+ * Body: { draftId: string }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -31,10 +31,9 @@ export async function POST(req: NextRequest) {
 
     const supabase = getAdminClient();
 
-    // Fetch the draft
     const { data: draft, error: fetchError } = await supabase
       .from("blog_drafts")
-      .select("*")
+      .select("*, blog_topics(keywords)")
       .eq("id", draftId)
       .single();
 
@@ -45,65 +44,57 @@ export async function POST(req: NextRequest) {
     if (!draft.title || !draft.slug || !draft.body_mdx) {
       return NextResponse.json(
         { error: "Draft must have a title, slug, and body content before publishing" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    // Build the MDX file with YAML frontmatter
-    const today = new Date().toISOString().split("T")[0];
-    const publishDate = new Date().toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
+    const keywords = draft.blog_topics?.keywords?.length
+      ? draft.blog_topics.keywords.join(", ")
+      : undefined;
 
-    const sd = (draft.structured_data || {}) as Record<string, unknown>;
-    const frontmatterLines = [
-      "---",
-      `title: "${draft.title.replace(/"/g, '\\"')}"`,
-      `description: "${(draft.meta_description || "").replace(/"/g, '\\"')}"`,
-      `slug: "${draft.slug}"`,
-      `category: "${draft.category || ""}"`,
-      `image: "${draft.featured_image || ""}"`,
-      `readTime: "${draft.read_time || ""}"`,
-      `publishDate: "${publishDate}"`,
-      `datePublished: "${today}"`,
-      `dateModified: "${today}"`,
-      sd.keywords ? `keywords: "${String(sd.keywords).replace(/"/g, '\\"')}"` : null,
-      sd.imageCaption ? `imageCaption: "${String(sd.imageCaption).replace(/"/g, '\\"')}"` : null,
-      sd.layout ? `layout: "${sd.layout}"` : null,
-      sd.showArticleSummary !== undefined ? `showArticleSummary: ${sd.showArticleSummary}` : null,
-    ].filter(Boolean);
-    const frontmatter = frontmatterLines.join("\n");
+    const mdxContent = buildMdxFile(
+      {
+        title: draft.title,
+        slug: draft.slug,
+        meta_description: draft.meta_description,
+        category: draft.category,
+        featured_image: draft.featured_image,
+        read_time: draft.read_time,
+        keywords,
+        structured_data: draft.structured_data,
+      },
+      draft.body_mdx,
+    );
 
-    const mdxContent = `${frontmatter}\n\n${draft.body_mdx}`;
-
-    // Create the GitHub PR
-    const { prUrl, prNumber } = await createBlogPR({
+    const { commitUrl } = await commitBlogDirectly({
       slug: draft.slug,
       mdxContent,
       title: draft.title,
+      commitMessage: `Blog: ${draft.title}`,
     });
 
-    // Update the draft status
     await supabase
       .from("blog_drafts")
       .update({
         status: "published",
         published_at: new Date().toISOString(),
-        github_pr_url: prUrl,
+        github_pr_url: commitUrl,
       })
       .eq("id", draftId);
 
-    return NextResponse.json({
-      success: true,
-      prUrl,
-      prNumber,
+    await notifyPostPublished({
+      title: draft.title,
+      slug: draft.slug,
+      commitUrl,
+      scheduledPublish: false,
     });
+
+    return NextResponse.json({ success: true, commitUrl });
   } catch (error: any) {
     console.error("Publish error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to publish" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

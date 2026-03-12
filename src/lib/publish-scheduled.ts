@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { commitBlogDirectly } from "@/lib/github";
-import { sanitizeMdxBody } from "@/lib/utils";
+import { buildMdxFile } from "@/lib/frontmatter";
 import { notifyPostPublished } from "@/lib/notify";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -60,50 +60,23 @@ export async function publishScheduledDrafts(): Promise<PublishResult> {
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const publishDate = new Date().toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
-
   const keywords = draft.blog_topics?.keywords?.length
     ? draft.blog_topics.keywords.join(", ")
     : undefined;
 
-  const frontmatterLines = [
-    "---",
-    `title: "${draft.title.replace(/"/g, '\\"')}"`,
-    `description: "${(draft.meta_description || "").replace(/"/g, '\\"')}"`,
-    `slug: "${draft.slug}"`,
-    `category: "${draft.category || ""}"`,
-  ];
-
-  if (draft.featured_image) {
-    frontmatterLines.push(
-      `image: "${draft.featured_image.replace(/"/g, '\\"')}"`
-    );
-  }
-
-  frontmatterLines.push(
-    `readTime: "${draft.read_time || "5 min read"}"`,
-    `publishDate: "${publishDate}"`,
-    `datePublished: "${today}"`,
-    `dateModified: "${today}"`
+  const mdxContent = buildMdxFile(
+    {
+      title: draft.title,
+      slug: draft.slug,
+      meta_description: draft.meta_description,
+      category: draft.category,
+      featured_image: draft.featured_image,
+      read_time: draft.read_time,
+      keywords,
+      structured_data: draft.structured_data,
+    },
+    draft.body_mdx,
   );
-
-  if (keywords) {
-    frontmatterLines.push(`keywords: "${keywords.replace(/"/g, '\\"')}"`);
-  }
-
-  const sd = (draft.structured_data || {}) as Record<string, unknown>;
-  if (sd.layout) frontmatterLines.push(`layout: "${sd.layout}"`);
-  if (sd.showArticleSummary !== undefined)
-    frontmatterLines.push(`showArticleSummary: ${sd.showArticleSummary}`);
-
-  frontmatterLines.push("---");
-  const frontmatter = frontmatterLines.join("\n");
-  const body = sanitizeMdxBody(draft.body_mdx);
-  const mdxContent = `${frontmatter}\n\n${body}`;
 
   console.log(
     `[Publish] Publishing draft: ${draft.title} (scheduled for ${draft.scheduled_publish_at})`

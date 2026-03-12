@@ -12,10 +12,12 @@ import {
   Settings,
   LogOut,
   X,
+  Target,
 } from "lucide-react";
 
 const navItems = [
   { href: "/topics", label: "Research Topics", icon: Lightbulb },
+  { href: "/competitor-analysis", label: "Competitor Analysis", icon: Target },
   { href: "/", label: "Scheduled Posts", icon: Calendar },
   { href: "/posts", label: "All Posts", icon: FileText },
   { href: "/feedback", label: "Feedback", icon: MessageSquare },

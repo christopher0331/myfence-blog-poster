@@ -129,7 +129,7 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     
     setPublishing(true);
     try {
-      const response = await fetch("/api/test-github", {
+      const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ draftId: draft.id }),
@@ -141,14 +141,13 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
         throw new Error(data.error || "Failed to publish to GitHub");
       }
 
-      // Reload draft to get updated GitHub URL
       const updated = await draftsApi.getById(draft.id);
       setDraft(updated);
 
       alert(`Successfully published to GitHub!\n\nCommit: ${data.commitUrl}`);
     } catch (err: any) {
       console.error("Failed to publish to GitHub:", err);
-      alert(`Failed to publish to GitHub: ${err.message}\n\nCheck Netlify logs for details.`);
+      alert(`Failed to publish: ${err.message}`);
     } finally {
       setPublishing(false);
     }

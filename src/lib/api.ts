@@ -1,4 +1,4 @@
-import type { BlogDraft, BlogTopic } from "./types";
+import type { BlogDraft, BlogTopic, CompetitorAnalysisResult, CompetitorOpportunity } from "./types";
 
 const API_BASE = "/api";
 
@@ -127,5 +127,36 @@ export const topicsApi = {
     }
     const data = await response.json();
     return data.ideas || [];
+  },
+};
+
+// Competitor Analysis API
+export const competitorApi = {
+  async analyze(csvText: string): Promise<CompetitorAnalysisResult> {
+    const response = await fetch(`${API_BASE}/competitor-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "analyze", csvText }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Analysis failed");
+    }
+    return response.json();
+  },
+
+  async createTopics(
+    opportunities: CompetitorOpportunity[],
+  ): Promise<{ created: number; message: string }> {
+    const response = await fetch(`${API_BASE}/competitor-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create-topics", opportunities }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to create topics");
+    }
+    return response.json();
   },
 };

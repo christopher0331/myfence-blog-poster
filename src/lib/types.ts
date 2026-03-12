@@ -50,6 +50,30 @@ export interface BlogDraft {
   updated_at: string;
 }
 
+export interface CompetitorOpportunity {
+  competitorUrl: string;
+  competitorSlug: string;
+  suggestedTitle: string;
+  suggestedDescription: string;
+  suggestedKeywords: string[];
+  estimatedTraffic: number;
+  infoTraffic: number;
+  competitorKeywordCount: number;
+  trafficTrend: "growing" | "stable" | "declining";
+  priority: "high" | "medium" | "low";
+  alreadyCovered: boolean;
+  existingSlug?: string;
+}
+
+export interface CompetitorAnalysisResult {
+  competitor: string;
+  totalPages: number;
+  contentPages: number;
+  opportunities: CompetitorOpportunity[];
+  alreadyCovered: number;
+  gaps: number;
+}
+
 export interface LighthouseScore {
   id: string;
   page_url: string;
