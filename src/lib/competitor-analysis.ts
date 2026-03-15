@@ -68,7 +68,7 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
-const NON_CONTENT_PATTERNS = [
+const BASE_NON_CONTENT_PATTERNS = [
   /^https?:\/\/[^/]+\/?(\?.*)?$/,
   /\/(reviews|contact|about|careers|faq|privacy|terms|warranty|financing|projects|instant-estimate)\/?$/i,
   /\/category\//i,
@@ -78,11 +78,26 @@ const NON_CONTENT_PATTERNS = [
   /\/(residential|commercial).*landing\/?$/i,
   /-fence-company\/?$/i,
   /-fence-experts\/?$/i,
-  /\/(portland|seattle)\/?(\?.*)?$/i,
 ];
 
-function isContentPage(url: string): boolean {
-  return !NON_CONTENT_PATTERNS.some((p) => p.test(url));
+function buildLocationPattern(location?: string): RegExp | null {
+  if (!location) return null;
+  const tokens = location
+    .toLowerCase()
+    .replace(/[^a-z0-9\s/,-]/g, " ")
+    .split(/[\s/,-]+/)
+    .filter((t) => t.length > 3)
+    .slice(0, 4);
+  if (tokens.length === 0) return null;
+  return new RegExp(`/(${tokens.join("|")})/?(\\?.*)?$`, "i");
+}
+
+function isContentPage(url: string, location?: string): boolean {
+  const locationPattern = buildLocationPattern(location);
+  const patterns = locationPattern
+    ? [...BASE_NON_CONTENT_PATTERNS, locationPattern]
+    : BASE_NON_CONTENT_PATTERNS;
+  return !patterns.some((p) => p.test(url));
 }
 
 function extractSlug(url: string): string {
@@ -132,9 +147,9 @@ export function parseSemrushCSV(csvText: string): SemrushRow[] {
   return rows;
 }
 
-export function filterContentPages(rows: SemrushRow[]): SemrushRow[] {
+export function filterContentPages(rows: SemrushRow[], location?: string): SemrushRow[] {
   return rows
-    .filter((r) => isContentPage(r.url))
+    .filter((r) => isContentPage(r.url, location))
     .filter((r) => r.traffic > 0 || r.keywords > 5)
     .sort((a, b) => b.traffic - a.traffic);
 }
@@ -164,7 +179,7 @@ interface ExistingPost {
   title: string;
 }
 
-async function getExistingPosts(): Promise<ExistingPost[]> {
+async function getExistingPosts(siteId: string): Promise<ExistingPost[]> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) return [];
@@ -176,6 +191,7 @@ async function getExistingPosts(): Promise<ExistingPost[]> {
   const { data } = await supabase
     .from("blog_drafts")
     .select("slug, title, status")
+    .eq("site_id", siteId)
     .in("status", ["draft", "review", "scheduled", "published"]);
 
   return (data || []).map((d: any) => ({
@@ -223,10 +239,12 @@ function findMatchingPost(
 
 export async function analyzeCompetitorContent(
   csvText: string,
+  siteId: string,
+  location?: string,
 ): Promise<AnalysisResult> {
   const allRows = parseSemrushCSV(csvText);
-  const contentRows = filterContentPages(allRows);
-  const existingPosts = await getExistingPosts();
+  const contentRows = filterContentPages(allRows, location);
+  const existingPosts = await getExistingPosts(siteId);
 
   const competitor = allRows[0]?.url
     ? new URL(allRows[0].url).hostname

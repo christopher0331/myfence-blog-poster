@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 export const maxDuration = 60;
 
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const site = await getSiteFromRequest(request);
     const { instruction, bodyMdx, title, metaDescription } =
       await request.json();
 
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `You are an expert blog editor for a fencing company in the Seattle/Pacific Northwest area. You will receive an existing blog article and an editing instruction. Apply the instruction precisely and return ONLY the edited article body in markdown. Do not include frontmatter, do not wrap in code blocks, do not add explanations before or after.
+    const prompt = `You are an expert blog editor for ${site.name} (${site.domain}), ${site.business_description}, serving ${site.location}. You will receive an existing blog article and an editing instruction. Apply the instruction precisely and return ONLY the edited article body in markdown. Do not include frontmatter, do not wrap in code blocks, do not add explanations before or after.
 
 ARTICLE TITLE: ${title || "Untitled"}
 

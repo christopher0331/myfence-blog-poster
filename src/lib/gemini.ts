@@ -1,6 +1,7 @@
 /**
  * Google Gemini API integration for writing blog posts
  */
+import type { SiteConfig } from "@/lib/types";
 
 interface TopicImageInput {
   url: string;
@@ -14,6 +15,7 @@ interface GeminiBlogRequest {
   topicDescription?: string;
   topicImages?: TopicImageInput[];
   targetLength?: number; // Target word count
+  site?: SiteConfig;
 }
 
 interface GeminiBlogResponse {
@@ -28,9 +30,17 @@ interface GeminiBlogResponse {
   showArticleSummary?: boolean;
 }
 
-function buildFallbackMeta(topic: string): string {
+const DEFAULT_SITE_CONTEXT = {
+  name: "MyFence",
+  domain: "myfence.com",
+  business_description: "a fence installation and maintenance company",
+  location: "Seattle/Pacific Northwest",
+};
+
+function buildFallbackMeta(topic: string, site?: SiteConfig): string {
   const clean = topic.replace(/[^a-zA-Z0-9\s,&'-]/g, " ").replace(/\s+/g, " ").trim();
-  const base = `Expert guide to ${clean.toLowerCase()} for Seattle & PNW homeowners.`;
+  const location = site?.location || DEFAULT_SITE_CONTEXT.location;
+  const base = `Expert guide to ${clean.toLowerCase()} for homeowners in ${location}.`;
   return base.length > 160 ? base.slice(0, 157).trimEnd() + "..." : base;
 }
 
@@ -44,6 +54,7 @@ export async function generateBlogPost({
   topicDescription,
   topicImages,
   targetLength = 1500,
+  site,
 }: GeminiBlogRequest): Promise<GeminiBlogResponse> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -61,8 +72,13 @@ export async function generateBlogPost({
     topicImages && topicImages.length > 0
       ? `\n\nUse these images in the article where appropriate. Include each with markdown image syntax and use the description for alt text. Place them in relevant sections.\n${topicImages.map((img) => `- URL: ${img.url}\n  Description/use: ${img.description}`).join("\n")}`
       : "";
+  const siteName = site?.name || DEFAULT_SITE_CONTEXT.name;
+  const siteDomain = site?.domain || DEFAULT_SITE_CONTEXT.domain;
+  const businessDescription =
+    site?.business_description || DEFAULT_SITE_CONTEXT.business_description;
+  const location = site?.location || DEFAULT_SITE_CONTEXT.location;
 
-  const prompt = `You are an expert blog writer specializing in fence installation, maintenance, and related topics for homeowners and contractors in the Seattle/Pacific Northwest area.
+  const prompt = `You are an expert blog writer for ${siteName} (${siteDomain}), ${businessDescription} serving ${location}.
 
 Write a comprehensive, SEO-optimized blog post about: ${topic}
 
@@ -100,7 +116,7 @@ CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, profession
 
 5. IMAGES (strict format):
    - Every image MUST use exactly: ![Alt text here](url) — opening bracket [ after !, then closing ], then (url). Never use ! without brackets (e.g. "!Alt text" is wrong).
-   - Example: ![Cedar fence in Seattle backyard](https://example.com/cedar-fence.jpg)
+   - Example: ![Fence project in local backyard](https://example.com/fence.jpg)
    - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line (authors can add ImageGrid manually if needed)
    - Suggest a featured_image URL if relevant (e.g., product photo, hero image). Use a placeholder like "/images/hero-placeholder.jpg" if no specific image
 
@@ -236,7 +252,7 @@ Start writing now. Output valid JSON only.`;
       return {
         title: parsed.title || topic,
         content,
-        metaDescription: parsed.metaDescription || buildFallbackMeta(topic),
+        metaDescription: parsed.metaDescription || buildFallbackMeta(topic, site),
         category: parsed.category,
         readTime: parsed.readTime || "5 min read",
         featuredImage: parsed.featuredImage,
@@ -257,7 +273,7 @@ Start writing now. Output valid JSON only.`;
       return {
         title,
         content,
-        metaDescription: buildFallbackMeta(topic),
+        metaDescription: buildFallbackMeta(topic, site),
         readTime: "5 min read",
       };
     }
@@ -278,11 +294,14 @@ export interface InvestigateTopicResult {
 /**
  * Quick research on a user's topic idea. Returns suggested title and brief description for the article.
  */
-export async function investigateTopic(idea: string): Promise<InvestigateTopicResult> {
+export async function investigateTopic(
+  idea: string,
+  site?: SiteConfig,
+): Promise<InvestigateTopicResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  const prompt = `You are a content strategist for a fence company blog (MyFence.com) in Seattle/Pacific Northwest.
+  const prompt = `You are a content strategist for ${site?.name || DEFAULT_SITE_CONTEXT.name} (${site?.domain || DEFAULT_SITE_CONTEXT.domain}), ${site?.business_description || DEFAULT_SITE_CONTEXT.business_description}, serving ${site?.location || DEFAULT_SITE_CONTEXT.location}.
 
 The user has this topic idea: "${idea.replace(/"/g, "'")}"
 
@@ -353,13 +372,13 @@ Example:
 /**
  * Suggest topic ideas when the user is stuck. Returns a list of short topic ideas.
  */
-export async function suggestTopicIdeas(): Promise<string[]> {
+export async function suggestTopicIdeas(site?: SiteConfig): Promise<string[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  const prompt = `You are a content strategist for a fence company blog (MyFence.com) in Seattle/Pacific Northwest.
+  const prompt = `You are a content strategist for ${site?.name || DEFAULT_SITE_CONTEXT.name} (${site?.domain || DEFAULT_SITE_CONTEXT.domain}), ${site?.business_description || DEFAULT_SITE_CONTEXT.business_description}, serving ${site?.location || DEFAULT_SITE_CONTEXT.location}.
 
-The user is stuck and needs topic ideas. Suggest 6 short, specific topic ideas that would make good blog posts for homeowners. Focus on: fence materials, installation, maintenance, costs, legal/neighbor issues, design, and local (Seattle/PNW) relevance.
+The user is stuck and needs topic ideas. Suggest 6 short, specific topic ideas that would make good blog posts for homeowners. Focus on: fence materials, installation, maintenance, costs, legal/neighbor issues, design, and location relevance.
 
 Respond with JSON only:
 {

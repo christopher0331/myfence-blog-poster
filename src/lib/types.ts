@@ -2,6 +2,20 @@ export type TopicSource = "user" | "ai";
 export type TopicStatus = "preparing" | "ready" | "in_progress" | "completed";
 export type DraftStatus = "draft" | "review" | "scheduled" | "published" | "failed";
 
+export interface SiteConfig {
+  id: string;
+  name: string;
+  abbreviation: string;
+  domain: string;
+  github_repo_owner: string;
+  github_repo_name: string;
+  github_default_branch: string;
+  business_description: string;
+  location: string;
+  notify_emails: string[];
+  blog_path_prefix: string;
+}
+
 export interface TopicImage {
   url: string;
   description: string;
@@ -66,12 +80,14 @@ export interface CompetitorOpportunity {
 }
 
 export interface CompetitorAnalysisResult {
+  id?: string;
   competitor: string;
   totalPages: number;
   contentPages: number;
   opportunities: CompetitorOpportunity[];
   alreadyCovered: number;
   gaps: number;
+  created_at?: string;
 }
 
 export interface LighthouseScore {

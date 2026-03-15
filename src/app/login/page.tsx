@@ -38,8 +38,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 text-4xl font-bold text-primary">MF</div>
-          <CardTitle className="text-2xl">MyFence Studio</CardTitle>
+          <div className="mx-auto mb-4 text-4xl font-bold text-primary">CMS</div>
+          <CardTitle className="text-2xl">Studio CMS</CardTitle>
           <CardDescription>
             Sign in to manage blog content and publishing
           </CardDescription>

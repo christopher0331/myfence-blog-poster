@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Gauge, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useSite } from "@/lib/site-context";
 import type { LighthouseScore } from "@/lib/types";
 
 function scoreColor(score: number) {
@@ -23,6 +24,7 @@ function scoreBg(score: number) {
 }
 
 export default function LighthousePage() {
+  const { siteId, currentSite } = useSite();
   const [scores, setScores] = useState<LighthouseScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -36,12 +38,13 @@ export default function LighthousePage() {
 
   useEffect(() => {
     loadScores();
-  }, []);
+  }, [siteId]);
 
   async function loadScores() {
     const { data } = await supabase
       .from("lighthouse_scores")
       .select("*")
+      .eq("site_id", siteId)
       .order("measured_at", { ascending: false });
 
     setScores((data || []) as LighthouseScore[]);
@@ -51,6 +54,7 @@ export default function LighthousePage() {
   async function addScore() {
     await supabase.from("lighthouse_scores").insert({
       ...form,
+      site_id: siteId,
       measured_at: new Date().toISOString(),
     });
     setForm({ page_url: "", performance: 0, accessibility: 0, best_practices: 0, seo: 0 });
@@ -59,7 +63,11 @@ export default function LighthousePage() {
   }
 
   async function deleteScore(id: string) {
-    await supabase.from("lighthouse_scores").delete().eq("id", id);
+    await supabase
+      .from("lighthouse_scores")
+      .delete()
+      .eq("id", id)
+      .eq("site_id", siteId);
     loadScores();
   }
 
@@ -89,7 +97,7 @@ export default function LighthousePage() {
               <Input
                 value={form.page_url}
                 onChange={(e) => setForm({ ...form, page_url: e.target.value })}
-                placeholder="https://myfence.com/blog/..."
+                placeholder={`https://${currentSite?.domain || "example.com"}/blog/...`}
               />
             </div>
             <div className="grid grid-cols-4 gap-4">

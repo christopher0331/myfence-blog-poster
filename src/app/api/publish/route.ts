@@ -3,6 +3,7 @@ import { commitBlogDirectly } from "@/lib/github";
 import { buildMdxFile } from "@/lib/frontmatter";
 import { notifyPostPublished } from "@/lib/notify";
 import { createClient } from "@supabase/supabase-js";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -23,6 +24,7 @@ function getAdminClient() {
  */
 export async function POST(req: NextRequest) {
   try {
+    const site = await getSiteFromRequest(req);
     const { draftId } = await req.json();
 
     if (!draftId) {
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
       .from("blog_drafts")
       .select("*, blog_topics(keywords)")
       .eq("id", draftId)
+      .eq("site_id", site.id)
       .single();
 
     if (fetchError || !draft) {
@@ -71,6 +74,7 @@ export async function POST(req: NextRequest) {
       mdxContent,
       title: draft.title,
       commitMessage: `Blog: ${draft.title}`,
+      site,
     });
 
     await supabase
@@ -80,13 +84,15 @@ export async function POST(req: NextRequest) {
         published_at: new Date().toISOString(),
         github_pr_url: commitUrl,
       })
-      .eq("id", draftId);
+      .eq("id", draftId)
+      .eq("site_id", site.id);
 
     await notifyPostPublished({
       title: draft.title,
       slug: draft.slug,
       commitUrl,
       scheduledPublish: false,
+      site,
     });
 
     return NextResponse.json({ success: true, commitUrl });

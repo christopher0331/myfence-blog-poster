@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { createBlogPR, commitBlogDirectly } from "@/lib/github";
 import { sanitizeMdxBody } from "@/lib/utils";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 export const maxDuration = 60;
 
@@ -27,6 +28,7 @@ function getAdminClient() {
  */
 export async function POST(req: NextRequest) {
   try {
+    const site = await getSiteFromRequest(req);
     const { topicId, commitToGitHub = false } = await req.json();
 
     if (!topicId) {
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
       .from("blog_topics")
       .select("*")
       .eq("id", topicId)
+      .eq("site_id", site.id)
       .single();
 
     if (topicError || !topic) {
@@ -59,7 +62,8 @@ export async function POST(req: NextRequest) {
     await supabase
       .from("blog_topics")
       .update({ status: "in_progress" })
-      .eq("id", topicId);
+      .eq("id", topicId)
+      .eq("site_id", site.id);
 
     // Generate blog post using Gemini
     console.log(`Generating blog post for topic: ${topic.title}`);
@@ -72,6 +76,7 @@ export async function POST(req: NextRequest) {
         topicDescription: topic.description || undefined,
         topicImages: Array.isArray(topic.topic_images) ? topic.topic_images : undefined,
         targetLength: 1500,
+        site,
       });
       console.log(`Successfully generated blog post: ${blogPost.title}`);
     } catch (geminiError: any) {
@@ -90,6 +95,7 @@ export async function POST(req: NextRequest) {
       .from("blog_drafts")
       .select("id")
       .eq("slug", slug)
+      .eq("site_id", site.id)
       .single();
 
     let draftId: string;
@@ -111,6 +117,7 @@ export async function POST(req: NextRequest) {
             showArticleSummary: (blogPost as any).showArticleSummary,
           },
           topic_id: topicId,
+          site_id: site.id,
           status: commitToGitHub ? "scheduled" : "draft",
           updated_at: new Date().toISOString(),
         })
@@ -140,6 +147,7 @@ export async function POST(req: NextRequest) {
             showArticleSummary: (blogPost as any).showArticleSummary,
           },
           topic_id: topicId,
+          site_id: site.id,
           status: commitToGitHub ? "scheduled" : "draft",
         })
         .select()
@@ -188,6 +196,7 @@ export async function POST(req: NextRequest) {
           mdxContent,
           title: blogPost.title,
           commitMessage: `Auto-generated blog: ${blogPost.title}`,
+          site,
         });
 
         githubUrl = commitUrl;
@@ -200,13 +209,15 @@ export async function POST(req: NextRequest) {
             status: "published",
             published_at: new Date().toISOString(),
           })
-          .eq("id", draftId);
+          .eq("id", draftId)
+          .eq("site_id", site.id);
 
         // Mark topic as completed
         await supabase
           .from("blog_topics")
           .update({ status: "completed" })
-          .eq("id", topicId);
+          .eq("id", topicId)
+          .eq("site_id", site.id);
       } catch (githubError: any) {
         console.error("GitHub commit error:", githubError);
         // Don't fail the whole request if GitHub fails
@@ -216,7 +227,8 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("blog_topics")
         .update({ status: "in_progress" })
-        .eq("id", topicId);
+        .eq("id", topicId)
+        .eq("site_id", site.id);
     }
 
     return NextResponse.json({

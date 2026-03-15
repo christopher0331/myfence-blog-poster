@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { commitBlogDirectly } from "@/lib/github";
 import { buildMdxFile } from "@/lib/frontmatter";
 import { notifyPostPublished } from "@/lib/notify";
+import type { SiteConfig } from "@/lib/types";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
@@ -48,6 +49,11 @@ export async function publishScheduledDrafts(): Promise<PublishResult> {
   }
 
   const draft = drafts[0];
+  const { data: site } = await supabase
+    .from("sites")
+    .select("*")
+    .eq("id", draft.site_id)
+    .single();
 
   if (!draft.title || !draft.body_mdx || !draft.slug) {
     await supabase
@@ -86,6 +92,7 @@ export async function publishScheduledDrafts(): Promise<PublishResult> {
     mdxContent,
     title: draft.title,
     commitMessage: `Scheduled blog: ${draft.title}`,
+    site: (site || undefined) as SiteConfig | undefined,
   });
 
   await supabase
@@ -104,6 +111,7 @@ export async function publishScheduledDrafts(): Promise<PublishResult> {
     slug: draft.slug,
     commitUrl,
     scheduledPublish: true,
+    site: (site || undefined) as SiteConfig | undefined,
   });
 
   return {

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Lightbulb, Trash2, Sparkles, Loader2, ImagePlus, HelpCircle } from "lucide-react";
 import { topicsApi } from "@/lib/api";
+import { useSite } from "@/lib/site-context";
 import type { BlogTopic, TopicStatus, TopicImage } from "@/lib/types";
 
 const STATUS_OPTIONS: { value: TopicStatus; label: string; description: string }[] = [
@@ -28,6 +29,7 @@ const statusBadgeVariant = (status: TopicStatus) => {
 };
 
 export default function TopicsPage() {
+  const { currentSite } = useSite();
   const [topics, setTopics] = useState<BlogTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [ideaInput, setIdeaInput] = useState("");
@@ -256,7 +258,7 @@ export default function TopicsPage() {
         <CardHeader>
           <CardTitle className="text-lg">Your topic idea</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Enter a short idea (e.g. &quot;steel vs wood posts&quot; or &quot;fence staining in Seattle&quot;). AI will research it and suggest a title and article scope.
+            Enter a short idea (e.g. &quot;steel vs wood posts&quot; or &quot;fence staining in your area&quot;). AI will research it and suggest a title and article scope.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -264,7 +266,7 @@ export default function TopicsPage() {
             <Input
               value={ideaInput}
               onChange={(e) => setIdeaInput(e.target.value)}
-              placeholder="e.g., steel vs wood fence posts, fence staining Seattle..."
+              placeholder={`e.g., steel vs wood fence posts, fence staining ${currentSite?.location || "local"}...`}
               className="flex-1"
               onKeyDown={(e) => e.key === "Enter" && handleResearchIdea()}
             />

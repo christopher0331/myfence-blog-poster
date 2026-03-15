@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import type {
 } from "@/lib/types";
 
 export default function CompetitorAnalysisPage() {
+  const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<CompetitorAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,34 @@ export default function CompetitorAnalysisPage() {
   const [creating, setCreating] = useState(false);
   const [createdCount, setCreatedCount] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    competitorApi.load().then((saved) => {
+      if (saved) {
+        setResult(saved);
+        const autoSelect = new Set<string>();
+        saved.opportunities.forEach((opp) => {
+          if (!opp.alreadyCovered && opp.priority !== "low") {
+            autoSelect.add(opp.competitorUrl);
+          }
+        });
+        setSelected(autoSelect);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const syncToDb = useCallback(
+    (updated: CompetitorAnalysisResult) => {
+      if (!updated.id) return;
+      if (syncTimer.current) clearTimeout(syncTimer.current);
+      syncTimer.current = setTimeout(() => {
+        competitorApi.syncOpportunities(updated.id!, updated.opportunities);
+      }, 1000);
+    },
+    [],
+  );
 
   const processCSV = useCallback(async (csvText: string) => {
     setAnalyzing(true);
@@ -151,14 +180,16 @@ export default function CompetitorAnalysisPage() {
           break;
         case "update":
           if (result && action.url && action.changes) {
-            setResult({
+            const updated = {
               ...result,
               opportunities: result.opportunities.map((o) =>
                 o.competitorUrl === action.url
                   ? { ...o, ...action.changes }
                   : o,
               ),
-            });
+            };
+            setResult(updated);
+            syncToDb(updated);
           }
           break;
         case "remove":
@@ -167,12 +198,14 @@ export default function CompetitorAnalysisPage() {
             const filtered = result.opportunities.filter(
               (o) => !removeSet.has(o.competitorUrl),
             );
-            setResult({
+            const updated = {
               ...result,
               opportunities: filtered,
               gaps: filtered.filter((o) => !o.alreadyCovered).length,
               alreadyCovered: filtered.filter((o) => o.alreadyCovered).length,
-            });
+            };
+            setResult(updated);
+            syncToDb(updated);
             setSelected((prev) => {
               const next = new Set(prev);
               removeSet.forEach((u) => next.delete(u));
@@ -182,7 +215,7 @@ export default function CompetitorAnalysisPage() {
           break;
       }
     },
-    [result],
+    [result, syncToDb],
   );
 
   const gaps = result?.opportunities.filter((o) => !o.alreadyCovered) || [];
@@ -214,8 +247,17 @@ export default function CompetitorAnalysisPage() {
         </p>
       </div>
 
+      {/* Initial load */}
+      {loading && (
+        <Card>
+          <CardContent className="p-16 text-center">
+            <Loader2 className="h-8 w-8 mx-auto text-muted-foreground animate-spin" />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Upload area */}
-      {!result && !analyzing && (
+      {!loading && !result && !analyzing && (
         <Card>
           <CardContent className="p-0">
             <label
@@ -477,6 +519,9 @@ export default function CompetitorAnalysisPage() {
             <Button
               variant="outline"
               onClick={() => {
+                if (result?.id) {
+                  competitorApi.deleteAnalysis(result.id);
+                }
                 setResult(null);
                 setError(null);
                 setSelected(new Set());

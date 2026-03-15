@@ -1,6 +1,18 @@
 import type { BlogDraft, BlogTopic, CompetitorAnalysisResult, CompetitorOpportunity } from "./types";
 
 const API_BASE = "/api";
+const DEFAULT_SITE_ID = "11111111-1111-1111-1111-111111111111";
+
+function getCurrentSiteId() {
+  if (typeof window === "undefined") return DEFAULT_SITE_ID;
+  return window.localStorage.getItem("selected-site-id") || DEFAULT_SITE_ID;
+}
+
+async function apiFetch(input: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers || {});
+  headers.set("x-site-id", getCurrentSiteId());
+  return fetch(input, { ...init, headers });
+}
 
 // Helper to handle API responses
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -30,17 +42,17 @@ export const draftsApi = {
     if (filters?.order) params.set("order", filters.order);
     if (filters?.ascending !== undefined) params.set("ascending", String(filters.ascending));
 
-    const response = await fetch(`${API_BASE}/drafts?${params.toString()}`);
+    const response = await apiFetch(`${API_BASE}/drafts?${params.toString()}`);
     return handleResponse<BlogDraft[]>(response);
   },
 
   async getById(id: string): Promise<BlogDraft> {
-    const response = await fetch(`${API_BASE}/drafts/${id}`);
+    const response = await apiFetch(`${API_BASE}/drafts/${id}`);
     return handleResponse<BlogDraft>(response);
   },
 
   async create(data: Partial<BlogDraft>): Promise<BlogDraft> {
-    const response = await fetch(`${API_BASE}/drafts`, {
+    const response = await apiFetch(`${API_BASE}/drafts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -49,7 +61,7 @@ export const draftsApi = {
   },
 
   async update(id: string, data: Partial<BlogDraft>): Promise<BlogDraft> {
-    const response = await fetch(`${API_BASE}/drafts/${id}`, {
+    const response = await apiFetch(`${API_BASE}/drafts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -58,7 +70,7 @@ export const draftsApi = {
   },
 
   async delete(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/drafts/${id}`, {
+    const response = await apiFetch(`${API_BASE}/drafts/${id}`, {
       method: "DELETE",
     });
     await handleResponse(response);
@@ -75,12 +87,12 @@ export const topicsApi = {
     if (filters?.order) params.set("order", filters.order);
     if (filters?.ascending !== undefined) params.set("ascending", String(filters.ascending));
 
-    const response = await fetch(`${API_BASE}/topics?${params.toString()}`);
+    const response = await apiFetch(`${API_BASE}/topics?${params.toString()}`);
     return handleResponse<BlogTopic[]>(response);
   },
 
   async create(data: Partial<BlogTopic>): Promise<BlogTopic> {
-    const response = await fetch(`${API_BASE}/topics`, {
+    const response = await apiFetch(`${API_BASE}/topics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -89,7 +101,7 @@ export const topicsApi = {
   },
 
   async update(id: string, data: Partial<BlogTopic>): Promise<BlogTopic> {
-    const response = await fetch(`${API_BASE}/topics/${id}`, {
+    const response = await apiFetch(`${API_BASE}/topics/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -98,14 +110,14 @@ export const topicsApi = {
   },
 
   async delete(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/topics/${id}`, {
+    const response = await apiFetch(`${API_BASE}/topics/${id}`, {
       method: "DELETE",
     });
     await handleResponse(response);
   },
 
   async investigate(idea: string): Promise<{ suggestedTitle: string; description: string; keywords: string[] }> {
-    const response = await fetch(`${API_BASE}/topics/investigate`, {
+    const response = await apiFetch(`${API_BASE}/topics/investigate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idea }),
@@ -118,7 +130,7 @@ export const topicsApi = {
   },
 
   async suggestIdeas(): Promise<string[]> {
-    const response = await fetch(`${API_BASE}/topics/suggest-ideas`, {
+    const response = await apiFetch(`${API_BASE}/topics/suggest-ideas`, {
       method: "POST",
     });
     if (!response.ok) {
@@ -132,8 +144,15 @@ export const topicsApi = {
 
 // Competitor Analysis API
 export const competitorApi = {
+  async load(): Promise<CompetitorAnalysisResult | null> {
+    const response = await apiFetch(`${API_BASE}/competitor-analysis`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.analysis || null;
+  },
+
   async analyze(csvText: string): Promise<CompetitorAnalysisResult> {
-    const response = await fetch(`${API_BASE}/competitor-analysis`, {
+    const response = await apiFetch(`${API_BASE}/competitor-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "analyze", csvText }),
@@ -148,7 +167,7 @@ export const competitorApi = {
   async createTopics(
     opportunities: CompetitorOpportunity[],
   ): Promise<{ created: number; message: string }> {
-    const response = await fetch(`${API_BASE}/competitor-analysis`, {
+    const response = await apiFetch(`${API_BASE}/competitor-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create-topics", opportunities }),
@@ -158,5 +177,26 @@ export const competitorApi = {
       throw new Error(err.error || "Failed to create topics");
     }
     return response.json();
+  },
+
+  async syncOpportunities(
+    analysisId: string,
+    opportunities: CompetitorOpportunity[],
+  ): Promise<void> {
+    await apiFetch(`${API_BASE}/competitor-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update-opportunities",
+        analysisId,
+        opportunities,
+      }),
+    });
+  },
+
+  async deleteAnalysis(id: string): Promise<void> {
+    await apiFetch(`${API_BASE}/competitor-analysis?id=${id}`, {
+      method: "DELETE",
+    });
   },
 };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
@@ -26,12 +27,13 @@ function getAdminClient() {
 
 export async function GET(request: NextRequest) {
   try {
+    const site = await getSiteFromRequest(request);
     const { searchParams } = new URL(request.url);
     const orderBy = searchParams.get("order") || "priority";
     const ascending = searchParams.get("ascending") !== "false";
 
     const client = getAdminClient();
-    let query = client.from("blog_topics").select("*");
+    let query = client.from("blog_topics").select("*").eq("site_id", site.id);
     
     // Handle multiple order fields (priority desc, created_at desc)
     if (orderBy === "priority") {
@@ -71,9 +73,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const site = await getSiteFromRequest(request);
     const client = getAdminClient();
 
-    const { data, error } = await client.from("blog_topics").insert(body).select().single();
+    const { data, error } = await client
+      .from("blog_topics")
+      .insert({ ...body, site_id: site.id })
+      .select()
+      .single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

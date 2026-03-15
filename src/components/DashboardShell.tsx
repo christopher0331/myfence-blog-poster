@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/Sidebar";
+import { useSite } from "@/lib/site-context";
 
 export default function DashboardShell({
   children,
@@ -9,6 +10,7 @@ export default function DashboardShell({
   children: React.ReactNode;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { currentSite } = useSite();
 
   // Close mobile menu on resize to desktop
   useEffect(() => {
@@ -48,8 +50,12 @@ export default function DashboardShell({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="text-lg font-semibold text-primary">MF</span>
-          <span className="text-base font-medium">Studio</span>
+          <span className="text-lg font-semibold text-primary">
+            {currentSite?.abbreviation || "CMS"}
+          </span>
+          <span className="text-base font-medium">
+            {currentSite?.name || "Studio"}
+          </span>
         </header>
 
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">{children}</div>

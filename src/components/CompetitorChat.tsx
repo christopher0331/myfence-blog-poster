@@ -82,7 +82,12 @@ export default function CompetitorChat({
     try {
       const response = await fetch("/api/competitor-analysis/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-site-id":
+            window.localStorage.getItem("selected-site-id") ||
+            "11111111-1111-1111-1111-111111111111",
+        },
         body: JSON.stringify({
           message: text,
           opportunities,

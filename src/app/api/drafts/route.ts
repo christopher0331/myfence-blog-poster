@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const site = await getSiteFromRequest(request);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const scheduledDateGte = searchParams.get("scheduled_date_gte");
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
     const scheduledDateNotNull = searchParams.get("scheduled_date_not_null");
 
     const client = getAdminClient();
-    let query = client.from("blog_drafts").select("*");
+    let query = client.from("blog_drafts").select("*").eq("site_id", site.id);
 
     if (status) {
       query = query.eq("status", status);
@@ -99,12 +101,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const site = await getSiteFromRequest(request);
     const client = getAdminClient();
 
     // Ensure body_mdx has a default value if not provided (required by schema)
     const draftData = {
       ...body,
       body_mdx: body.body_mdx || "",
+      site_id: site.id,
     };
 
     const { data, error } = await client.from("blog_drafts").insert(draftData).select().single();

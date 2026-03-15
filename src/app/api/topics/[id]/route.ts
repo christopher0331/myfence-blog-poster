@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
@@ -31,12 +32,14 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
+    const site = await getSiteFromRequest(request);
     const client = getAdminClient();
 
     const { data, error } = await client
       .from("blog_topics")
       .update(body)
       .eq("id", id)
+      .eq("site_id", site.id)
       .select()
       .single();
 
@@ -56,9 +59,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const site = await getSiteFromRequest(request);
     const client = getAdminClient();
 
-    const { error } = await client.from("blog_topics").delete().eq("id", id);
+    const { error } = await client
+      .from("blog_topics")
+      .delete()
+      .eq("id", id)
+      .eq("site_id", site.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

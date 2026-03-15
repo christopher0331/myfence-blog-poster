@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { suggestTopicIdeas } from "@/lib/gemini";
+import { getSiteFromRequest } from "@/lib/get-site";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
-    const ideas = await suggestTopicIdeas();
+    const site = await getSiteFromRequest(req);
+    const ideas = await suggestTopicIdeas(site);
     return NextResponse.json({ ideas });
   } catch (error: any) {
     console.error("Suggest ideas error:", error);

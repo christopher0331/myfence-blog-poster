@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "MyFence Studio",
-  description: "Content management and blog publishing for myfence.com",
+  title: "Studio CMS",
+  description: "Content management and blog publishing",
 };
 
 export const viewport: Viewport = {

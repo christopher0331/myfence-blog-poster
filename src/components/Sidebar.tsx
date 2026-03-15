@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useSite } from "@/lib/site-context";
+import { Select } from "@/components/ui/select";
 import {
   FileText,
   Lightbulb,
@@ -35,6 +37,7 @@ export default function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { sites, siteId, setSiteId } = useSite();
 
   // Close mobile drawer when route changes (not when mobileOpen toggles)
   const prevPathname = useRef(pathname);
@@ -54,8 +57,12 @@ export default function Sidebar({
           className="flex items-center gap-2 min-w-0"
           onClick={onMobileClose}
         >
-          <span className="text-2xl font-bold text-primary shrink-0">MF</span>
-          <span className="text-lg font-semibold truncate">Studio</span>
+          <span className="text-2xl font-bold text-primary shrink-0">
+            {sites.find((s) => s.id === siteId)?.abbreviation || "CMS"}
+          </span>
+          <span className="text-lg font-semibold truncate">
+            {sites.find((s) => s.id === siteId)?.name || "Studio"}
+          </span>
         </Link>
         {onMobileClose && (
           <button
@@ -67,6 +74,21 @@ export default function Sidebar({
             <X className="h-5 w-5" />
           </button>
         )}
+      </div>
+
+      <div className="px-4 md:px-6 pt-3">
+        <Select
+          value={siteId}
+          onChange={(e) => setSiteId(e.target.value)}
+          className="h-9 text-sm"
+          aria-label="Select site"
+        >
+          {sites.map((site) => (
+            <option key={site.id} value={site.id}>
+              {site.name} ({site.domain})
+            </option>
+          ))}
+        </Select>
       </div>
 
       {/* Navigation */}

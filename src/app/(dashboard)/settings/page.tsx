@@ -4,8 +4,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Settings, Github, Database, Key } from "lucide-react";
+import { useSite } from "@/lib/site-context";
 
 export default function SettingsPage() {
+  const { currentSite } = useSite();
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,17 +36,35 @@ export default function SettingsPage() {
             <div>
               <label className="text-sm font-medium mb-1 block">Repo Owner</label>
               <Input
-                value={process.env.NEXT_PUBLIC_GITHUB_REPO_OWNER || ""}
+                value={currentSite?.github_repo_owner || ""}
                 disabled
-                placeholder="Set via GITHUB_REPO_OWNER env var"
+                placeholder="Select a site"
               />
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Repo Name</label>
               <Input
-                value={process.env.NEXT_PUBLIC_GITHUB_REPO_NAME || ""}
+                value={currentSite?.github_repo_name || ""}
                 disabled
-                placeholder="Set via GITHUB_REPO_NAME env var"
+                placeholder="Select a site"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Site Domain</label>
+              <Input
+                value={currentSite?.domain || ""}
+                disabled
+                placeholder="Select a site"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Location</label>
+              <Input
+                value={currentSite?.location || ""}
+                disabled
+                placeholder="Select a site"
               />
             </div>
           </div>
@@ -55,8 +76,8 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            GitHub settings are configured via environment variables for security.
-            Update them in your deployment platform or <code>.env.local</code> file.
+            Repository settings are per-site from the database. The GitHub token
+            is still configured via environment variables for security.
           </p>
         </CardContent>
       </Card>
@@ -97,16 +118,14 @@ export default function SettingsPage() {
             <div>
               <CardTitle className="text-lg">Authentication</CardTitle>
               <CardDescription>
-                Google OAuth configuration
+                Credentials authentication
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Authentication is handled via Google OAuth through NextAuth.js.
-            To restrict access, set the <code>ALLOWED_EMAILS</code> environment variable
-            with a comma-separated list of authorized email addresses.
+            Authentication is handled through NextAuth credentials for this CMS.
           </p>
         </CardContent>
       </Card>

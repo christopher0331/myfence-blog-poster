@@ -1,4 +1,5 @@
 import { Octokit } from "octokit";
+import type { SiteConfig } from "@/lib/types";
 
 function getOctokit() {
   const token = process.env.GITHUB_TOKEN;
@@ -6,11 +7,12 @@ function getOctokit() {
   return new Octokit({ auth: token });
 }
 
-function getRepoInfo() {
+function getRepoInfo(site?: SiteConfig) {
   return {
-    owner: process.env.GITHUB_REPO_OWNER || "",
-    repo: process.env.GITHUB_REPO_NAME || "myfence-clone",
-    defaultBranch: process.env.GITHUB_DEFAULT_BRANCH || "main",
+    owner: site?.github_repo_owner || process.env.GITHUB_REPO_OWNER || "",
+    repo: site?.github_repo_name || process.env.GITHUB_REPO_NAME || "myfence-clone",
+    defaultBranch:
+      site?.github_default_branch || process.env.GITHUB_DEFAULT_BRANCH || "main",
   };
 }
 
@@ -19,6 +21,7 @@ interface PublishBlogParams {
   mdxContent: string;
   title: string;
   commitMessage?: string;
+  site?: SiteConfig;
 }
 
 /**
@@ -30,9 +33,10 @@ export async function createBlogPR({
   mdxContent,
   title,
   commitMessage,
+  site,
 }: PublishBlogParams): Promise<{ prUrl: string; prNumber: number }> {
   const octokit = getOctokit();
-  const { owner, repo, defaultBranch } = getRepoInfo();
+  const { owner, repo, defaultBranch } = getRepoInfo(site);
 
   // 1. Get the SHA of the default branch HEAD
   const { data: refData } = await octokit.rest.git.getRef({
@@ -69,7 +73,7 @@ export async function createBlogPR({
     owner,
     repo,
     title: `📝 New Blog: ${title}`,
-    body: `## Auto-published from MyFence Studio\n\n**Post:** ${title}\n**Slug:** \`/blog/${slug}\`\n**File:** \`${filePath}\`\n\n---\n*This PR was created automatically by the MyFence Studio CMS.*`,
+    body: `## Auto-published from ${site?.name || "Studio CMS"}\n\n**Post:** ${title}\n**Slug:** \`/blog/${slug}\`\n**File:** \`${filePath}\`\n\n---\n*This PR was created automatically by the ${site?.name || "Studio CMS"} CMS.*`,
     head: branchName,
     base: defaultBranch,
   });
@@ -88,9 +92,10 @@ export async function commitBlogDirectly({
   mdxContent,
   title,
   commitMessage,
+  site,
 }: PublishBlogParams): Promise<{ commitUrl: string; sha: string }> {
   const octokit = getOctokit();
-  const { owner, repo, defaultBranch } = getRepoInfo();
+  const { owner, repo, defaultBranch } = getRepoInfo(site);
 
   const filePath = `src/content/blog/${slug}.mdx`;
   const message = commitMessage || `Add blog post: ${title}`;

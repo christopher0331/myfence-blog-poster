@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { sanitizeMdxBody } from "@/lib/utils";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 export const maxDuration = 60;
 
@@ -41,27 +42,26 @@ export async function GET(request: NextRequest) {
   }
 
   let topicId: string | null = null;
+  let currentSiteId: string | null = null;
   
   try {
+    const site = await getSiteFromRequest(request);
+    currentSiteId = site.id;
     const supabase = getAdminClient();
-
-    // Atomically claim the next ready topic. Uses FOR UPDATE SKIP LOCKED
-    // so concurrent cron runs cannot claim the same topic (prevents duplicate writes).
-    const { data: claimedTopics, error: claimError } = await supabase
-      .rpc("claim_next_approved_topic");
-
-    if (claimError) {
-      throw new Error(`Failed to claim topic: ${claimError.message}`);
-    }
-
-    const topic = Array.isArray(claimedTopics) && claimedTopics.length > 0
-      ? claimedTopics[0]
-      : null;
+    const { data: topic } = await supabase
+      .from("blog_topics")
+      .select("*")
+      .eq("site_id", site.id)
+      .eq("status", "ready")
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
 
     if (!topic) {
       return NextResponse.json({
         success: true,
-        message: "No ready topics to process",
+        message: `No ready topics to process for ${site.name}`,
         processed: 0,
       });
     }
@@ -76,8 +76,9 @@ export async function GET(request: NextRequest) {
     // Update progress: Researching
     await supabase
       .from("blog_topics")
-      .update({ progress_status: "Researching topic and gathering information..." })
-      .eq("id", topic.id);
+      .update({ status: "in_progress", progress_status: "Researching topic and gathering information..." })
+      .eq("id", topic.id)
+      .eq("site_id", site.id);
     
     let blogPost;
     try {
@@ -85,13 +86,15 @@ export async function GET(request: NextRequest) {
       await supabase
         .from("blog_topics")
         .update({ progress_status: "Generating blog content with AI..." })
-        .eq("id", topic.id);
+        .eq("id", topic.id)
+        .eq("site_id", site.id);
       
       blogPost = await generateBlogPost({
         topic: topic.title,
         keywords: topic.keywords || [],
         researchNotes: topic.research_notes || undefined,
         targetLength: 1500,
+        site,
       });
       console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);
       
@@ -99,7 +102,8 @@ export async function GET(request: NextRequest) {
       await supabase
         .from("blog_topics")
         .update({ progress_status: "Saving draft to database..." })
-        .eq("id", topic.id);
+        .eq("id", topic.id)
+        .eq("site_id", site.id);
     } catch (geminiError: any) {
       console.error("[Cron] Gemini API error:", geminiError);
       throw new Error(`Gemini API failed: ${geminiError.message}`);
@@ -116,6 +120,7 @@ export async function GET(request: NextRequest) {
       .from("blog_drafts")
       .select("id")
       .eq("slug", slug)
+      .eq("site_id", site.id)
       .single();
 
     let draftId: string;
@@ -131,6 +136,7 @@ export async function GET(request: NextRequest) {
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
           topic_id: topic.id,
+          site_id: site.id,
           status: "draft",
           updated_at: new Date().toISOString(),
         })
@@ -154,6 +160,7 @@ export async function GET(request: NextRequest) {
           category: blogPost.category || "",
           read_time: blogPost.readTime || "5 min read",
           topic_id: topic.id,
+          site_id: site.id,
           status: "draft",
         })
         .select()
@@ -171,7 +178,8 @@ export async function GET(request: NextRequest) {
     await supabase
       .from("blog_topics")
       .update({ status: "completed" })
-      .eq("id", topic.id);
+      .eq("id", topic.id)
+      .eq("site_id", site.id);
 
     console.log(`[Cron] Draft saved (id: ${draftId}). Awaiting manual publish.`);
 
@@ -193,7 +201,8 @@ export async function GET(request: NextRequest) {
         await getAdminClient()
           .from("blog_topics")
           .update({ status: "ready" }) // Reset so it can be retried
-          .eq("id", topicId);
+          .eq("id", topicId)
+          .eq("site_id", currentSiteId);
       } catch (updateError) {
         console.error("Failed to update topic error status:", updateError);
       }

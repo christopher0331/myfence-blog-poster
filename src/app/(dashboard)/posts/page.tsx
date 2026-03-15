@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Search, FileText } from "lucide-react";
 import { draftsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useSite } from "@/lib/site-context";
 import type { BlogDraft } from "@/lib/types";
 
 function calcOverall(post: BlogDraft): number {
@@ -33,6 +34,7 @@ function calcOverall(post: BlogDraft): number {
 
 export default function PostsPage() {
   const router = useRouter();
+  const { currentSite } = useSite();
   const [drafts, setDrafts] = useState<BlogDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -99,7 +101,8 @@ export default function PostsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">All Posts</h1>
           <p className="text-muted-foreground mt-1">
-            {drafts.length} posts total — preview how they'll look on myfence.com
+            {drafts.length} posts total — preview how they&apos;ll look on{" "}
+            {currentSite?.domain || "your site"}
           </p>
         </div>
         <Button onClick={createNewDraft} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
@@ -154,7 +157,7 @@ export default function PostsPage() {
                       onClick={() => router.push(`/posts/${post.id}`)}
                     >
                       <CardHeader className="p-0 relative">
-                        {/* Image with 4:3 aspect ratio — matching myfence.com */}
+                        {/* Image with 4:3 aspect ratio */}
                         <div className="relative" style={{ aspectRatio: "4/3" }}>
                           {post.featured_image ? (
                             // eslint-disable-next-line @next/next/no-img-element

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { TopicStatus } from "@/lib/types";
+import { getSiteFromRequest } from "@/lib/get-site";
 
 export const runtime = "edge";
 
@@ -25,7 +26,8 @@ interface CompactOpportunity {
   selected: boolean;
 }
 
-const SYSTEM_PROMPT = `You are an AI assistant for the MyFence Studio competitor analysis tool. The user has uploaded a SEMrush CSV and can see a list of competitor content pages (opportunities).
+function getSystemPrompt(siteName: string, location: string) {
+  return `You are an AI assistant for the ${siteName} competitor analysis tool. The user has uploaded a SEMrush CSV and can see a list of competitor content pages (opportunities).
 
 You can help the user by performing actions on the data. Respond with a JSON object containing:
 - "message": A brief, helpful response to the user (1-3 sentences)
@@ -57,18 +59,20 @@ Available action types:
 Rules:
 - Always reference opportunities by their exact competitorUrl
 - When the user says "select the top 5", select the 5 with highest traffic
-- When updating titles, make them SEO-friendly and relevant to Seattle/PNW fence content
+- When updating titles, make them SEO-friendly and relevant to ${location}
 - For CREATE_TOPICS, only include uncovered (not already covered) opportunities
 - Keep messages concise and action-oriented
 - If the user asks a question, just respond with information (empty actions array)
 - You can perform multiple actions in one response
 
 Return ONLY valid JSON, no markdown fences.`;
+}
 
 export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
 
   try {
+    const site = await getSiteFromRequest(req);
     const { message, opportunities, selectedUrls } = await req.json();
 
     if (!message || typeof message !== "string") {
@@ -125,7 +129,9 @@ USER MESSAGE: ${message}`;
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              systemInstruction: {
+                parts: [{ text: getSystemPrompt(site.name, site.location) }],
+              },
               contents: [{ parts: [{ text: userPrompt }] }],
               generationConfig: {
                 temperature: 0.3,
@@ -191,6 +197,7 @@ USER MESSAGE: ${message}`;
                   const { data: existing } = await supabase
                     .from("blog_topics")
                     .select("id")
+                    .eq("site_id", site.id)
                     .ilike("title", `%${opp.suggestedTitle.slice(0, 30)}%`)
                     .limit(1);
 
@@ -200,6 +207,7 @@ USER MESSAGE: ${message}`;
                     opp.priority === "high" ? "ready" : "preparing";
 
                   const { error } = await supabase.from("blog_topics").insert({
+                    site_id: site.id,
                     title: opp.suggestedTitle,
                     description: opp.suggestedDescription,
                     keywords: opp.suggestedKeywords || [],
