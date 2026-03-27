@@ -56,6 +56,11 @@ export default function TopicsPage() {
   const [expandedImagesId, setExpandedImagesId] = useState<string | null>(null);
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newImageDesc, setNewImageDesc] = useState("");
+  const [inputMode, setInputMode] = useState<"research" | "direct">("research");
+  const [directTitle, setDirectTitle] = useState("");
+  const [directInstructions, setDirectInstructions] = useState("");
+  const [directKeywords, setDirectKeywords] = useState("");
+  const [savingDirect, setSavingDirect] = useState(false);
 
   const loadTopics = useCallback(async () => {
     try {
@@ -99,6 +104,31 @@ export default function TopicsPage() {
     setResearchResult(null);
     setIdeaInput("");
     setSuggestedIdeas([]);
+  }
+
+  async function saveDirectTopic() {
+    if (!directTitle.trim() || !directInstructions.trim()) return;
+    setSavingDirect(true);
+    try {
+      await topicsApi.create({
+        title: directTitle.trim(),
+        description: null,
+        keywords: directKeywords.split(",").map((k) => k.trim()).filter(Boolean),
+        research_notes: directInstructions.trim(),
+        priority: 5,
+        source: "user",
+        status: "preparing",
+      });
+      setDirectTitle("");
+      setDirectInstructions("");
+      setDirectKeywords("");
+      loadTopics();
+    } catch (err) {
+      console.error(err);
+      alert((err as Error).message || "Failed to create topic");
+    } finally {
+      setSavingDirect(false);
+    }
   }
 
   async function handleResearchIdea() {
@@ -256,74 +286,151 @@ export default function TopicsPage() {
       {/* User idea input + Research */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Your topic idea</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Enter a short idea (e.g. &quot;steel vs wood posts&quot; or &quot;fence staining in your area&quot;). AI will research it and suggest a title and article scope.
-          </p>
+          <CardTitle className="text-lg">Add a topic</CardTitle>
+          {/* Tab switcher */}
+          <div className="flex gap-1 mt-2 border-b">
+            <button
+              type="button"
+              onClick={() => setInputMode("research")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                inputMode === "research"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Research idea with AI
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode("direct")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                inputMode === "direct"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Direct instructions
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              value={ideaInput}
-              onChange={(e) => setIdeaInput(e.target.value)}
-              placeholder={`e.g., steel vs wood fence posts, fence staining ${currentSite?.location || "local"}...`}
-              className="flex-1"
-              onKeyDown={(e) => e.key === "Enter" && handleResearchIdea()}
-            />
-            <Button onClick={handleResearchIdea} disabled={!ideaInput.trim() || investigating}>
-              {investigating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-              Research with AI
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleSuggestIdeas} disabled={suggesting}>
-            {suggesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <HelpCircle className="h-4 w-4 mr-2" />}
-            I&apos;m stuck — suggest topic ideas
-          </Button>
-          {suggestedIdeas.length > 0 && (
-            <div className="rounded-md border p-3 space-y-2">
-              <p className="text-sm font-medium">Pick one to research:</p>
-              <ul className="flex flex-wrap gap-2">
-                {suggestedIdeas.map((idea, i) => (
-                  <li key={i}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setIdeaInput(idea);
-                        setSuggestedIdeas([]);
-                      }}
-                    >
-                      {idea}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {researchResult && (
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <p className="text-sm font-medium">Suggested topic card</p>
-              <p className="font-semibold">{researchResult.suggestedTitle}</p>
-              <p className="text-sm text-muted-foreground">{researchResult.description}</p>
-              {researchResult.keywords.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {researchResult.keywords.map((kw) => (
-                    <Badge key={kw} variant="secondary" className="text-xs">
-                      {kw}
-                    </Badge>
-                  ))}
-                </div>
-              )}
+          {inputMode === "research" ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Enter a short idea (e.g. &quot;steel vs wood posts&quot; or &quot;fence staining in your area&quot;). AI will research it and suggest a title and article scope.
+              </p>
               <div className="flex gap-2">
-                <Button onClick={createTopicFromResearch} disabled={creatingFromResearch}>
-                  {creatingFromResearch ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Create topic
-                </Button>
-                <Button variant="outline" onClick={() => setResearchResult(null)}>
-                  Discard
+                <Input
+                  value={ideaInput}
+                  onChange={(e) => setIdeaInput(e.target.value)}
+                  placeholder={`e.g., steel vs wood fence posts, fence staining ${currentSite?.location || "local"}...`}
+                  className="flex-1"
+                  onKeyDown={(e) => e.key === "Enter" && handleResearchIdea()}
+                />
+                <Button onClick={handleResearchIdea} disabled={!ideaInput.trim() || investigating}>
+                  {investigating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                  Research with AI
                 </Button>
               </div>
-            </div>
+              <Button variant="ghost" size="sm" onClick={handleSuggestIdeas} disabled={suggesting}>
+                {suggesting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <HelpCircle className="h-4 w-4 mr-2" />}
+                I&apos;m stuck &mdash; suggest topic ideas
+              </Button>
+              {suggestedIdeas.length > 0 && (
+                <div className="rounded-md border p-3 space-y-2">
+                  <p className="text-sm font-medium">Pick one to research:</p>
+                  <ul className="flex flex-wrap gap-2">
+                    {suggestedIdeas.map((idea, i) => (
+                      <li key={i}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setIdeaInput(idea);
+                            setSuggestedIdeas([]);
+                          }}
+                        >
+                          {idea}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {researchResult && (
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <p className="text-sm font-medium">Suggested topic card</p>
+                  <p className="font-semibold">{researchResult.suggestedTitle}</p>
+                  <p className="text-sm text-muted-foreground">{researchResult.description}</p>
+                  {researchResult.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {researchResult.keywords.map((kw) => (
+                        <Badge key={kw} variant="secondary" className="text-xs">
+                          {kw}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button onClick={createTopicFromResearch} disabled={creatingFromResearch}>
+                      {creatingFromResearch ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                      Create topic
+                    </Button>
+                    <Button variant="outline" onClick={() => setResearchResult(null)}>
+                      Discard
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Write exactly what you want in the article &mdash; structure, sections, talking points, tone, anything. The AI will follow your instructions when writing.
+              </p>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Article title</label>
+                <Input
+                  value={directTitle}
+                  onChange={(e) => setDirectTitle(e.target.value)}
+                  placeholder="e.g., Bothell Modified Picture Frame Fence — Project Showcase"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Your instructions for the article</label>
+                <Textarea
+                  value={directInstructions}
+                  onChange={(e) => setDirectInstructions(e.target.value)}
+                  placeholder={`Be as specific as you want. For example:\n\n- Start with an intro about the Bothell project we just completed\n- Section 1: describe the Modified Picture Frame style and why customers love it\n- Section 2: material options — Western Red Cedar, Treated Pine, Composite, Vinyl\n- Include a callout about our 5-year warranty\n- End with a strong CTA to get a free quote\n- Tone: friendly and professional, not too salesy`}
+                  rows={10}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Keywords <span className="text-muted-foreground font-normal">(optional, comma-separated)</span></label>
+                <Input
+                  value={directKeywords}
+                  onChange={(e) => setDirectKeywords(e.target.value)}
+                  placeholder="bothell fence, picture frame fence, cedar fence..."
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={saveDirectTopic}
+                  disabled={!directTitle.trim() || !directInstructions.trim() || savingDirect}
+                >
+                  {savingDirect ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                  Save topic
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => { setDirectTitle(""); setDirectInstructions(""); setDirectKeywords(""); }}
+                  disabled={savingDirect}
+                >
+                  Clear
+                </Button>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

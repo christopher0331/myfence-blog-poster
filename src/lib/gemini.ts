@@ -70,8 +70,8 @@ export async function generateBlogPost({
     : "";
   const imagesContext =
     topicImages && topicImages.length > 0
-      ? `\n\nUse these images in the article where appropriate. Include each with markdown image syntax and use the description for alt text. Place them in relevant sections.\n${topicImages.map((img) => `- URL: ${img.url}\n  Description/use: ${img.description}`).join("\n")}`
-      : "";
+      ? `\n\nIMAGES — MANDATORY RULES:\n- You have been given ${topicImages.length} real image URL(s) below. You MUST use ONLY these exact URLs.\n- Do NOT invent, fabricate, or guess any image URLs. Do NOT use placeholder paths like /images/anything.jpg or myfence.com/images/anything.\n- Every image you include must use one of the URLs listed here.\n- For the featuredImage JSON field, use this URL: ${topicImages[0].url}\n\nProvided images:\n${topicImages.map((img, i) => `${i + 1}. URL: ${img.url}\n   Alt/use: ${img.description}`).join("\n")}`
+      : `\n\nIMAGES: No images have been provided. Set featuredImage to an empty string and do NOT include any ![...](...) image syntax in the content.`;
   const siteName = site?.name || DEFAULT_SITE_CONTEXT.name;
   const siteDomain = site?.domain || DEFAULT_SITE_CONTEXT.domain;
   const businessDescription =
@@ -117,8 +117,9 @@ CRITICAL FORMATTING REQUIREMENTS - Follow these exactly for polished, profession
 5. IMAGES (strict format):
    - Every image MUST use exactly: ![Alt text here](url) — opening bracket [ after !, then closing ], then (url). Never use ! without brackets (e.g. "!Alt text" is wrong).
    - Example: ![Fence project in local backyard](https://example.com/fence.jpg)
-   - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line (authors can add ImageGrid manually if needed)
-   - Suggest a featured_image URL if relevant (e.g., product photo, hero image). Use a placeholder like "/images/hero-placeholder.jpg" if no specific image
+   - ONLY use image URLs explicitly provided in the IMAGES section above. NEVER invent, fabricate, or guess URLs.
+   - If no images were provided, set featuredImage to "" and include zero images in the content body.
+   - For side-by-side images, wrap in <ImageGrid columns={2}> and put each image on its own line
 
 6. IMAGE CAPTIONS:
    - If using a product or vendor image, suggest imageCaption: "Image courtesy of [Vendor Name]" with optional link
