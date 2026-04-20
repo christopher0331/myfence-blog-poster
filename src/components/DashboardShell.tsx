@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import AgentDrawer from "@/components/AgentDrawer";
 import { useSite } from "@/lib/site-context";
 import { Menu } from "lucide-react";
 
@@ -105,6 +106,8 @@ export default function DashboardShell({
 
         <div className="page-container">{children}</div>
       </main>
+
+      <AgentDrawer />
     </div>
   );
 }

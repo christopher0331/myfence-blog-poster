@@ -112,7 +112,10 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       </div>
 
       {/* Site switcher */}
-      <div className="px-3 pb-3" data-site-switcher>
+      <div
+        className="relative z-40 px-3 pb-3"
+        data-site-switcher
+      >
         <button
           type="button"
           onClick={() => setSwitcherOpen((v) => !v)}
@@ -132,35 +135,33 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" />
         </button>
         {switcherOpen && (
-          <div className="relative">
-            <div className="absolute left-0 right-0 top-1 z-50 rounded-md border border-border bg-popover shadow-lg animate-fade-in">
-              <div className="p-1">
-                {sites.map((site) => {
-                  const active = site.id === siteId;
-                  return (
-                    <button
-                      key={site.id}
-                      type="button"
-                      onClick={() => {
-                        setSiteId(site.id);
-                        setSwitcherOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent"
-                    >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-bold text-muted-foreground">
-                        {site.abbreviation?.slice(0, 2) || "—"}
+          <div className="absolute left-3 right-3 top-full z-[100] mt-1 rounded-md border border-border bg-popover shadow-xl animate-fade-in">
+            <div className="p-1">
+              {sites.map((site) => {
+                const active = site.id === siteId;
+                return (
+                  <button
+                    key={site.id}
+                    type="button"
+                    onClick={() => {
+                      setSiteId(site.id);
+                      setSwitcherOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent"
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-bold text-muted-foreground">
+                      {site.abbreviation?.slice(0, 2) || "—"}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate font-medium">{site.name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {site.domain}
                       </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block truncate font-medium">{site.name}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {site.domain}
-                        </span>
-                      </span>
-                      {active && <Check className="h-4 w-4 text-primary" />}
-                    </button>
-                  );
-                })}
-              </div>
+                    </span>
+                    {active && <Check className="h-4 w-4 text-primary" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -231,7 +232,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
 
   return (
     <>
-      <aside className="hidden md:flex w-60 flex-shrink-0 border-r border-border bg-card/50 min-h-screen flex-col">
+      <aside className="hidden md:flex relative z-40 w-60 flex-shrink-0 border-r border-border bg-card/50 min-h-screen flex-col">
         {content}
       </aside>
 
