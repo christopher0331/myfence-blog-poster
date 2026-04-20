@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import type { TopicStatus } from "@/lib/types";
 import { getSiteFromRequest } from "@/lib/get-site";
 import { getAdminClient } from "@/lib/supabase-admin";
+import { geminiModel } from "@/lib/gemini-model";
 
 export const runtime = "edge";
 
@@ -98,7 +99,7 @@ ${JSON.stringify(compact)}
 
 USER MESSAGE: ${message}`;
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = geminiModel("agent");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const stream = new ReadableStream({

@@ -2,6 +2,7 @@
  * Google Gemini API integration for writing blog posts
  */
 import type { SiteConfig } from "@/lib/types";
+import { geminiModel } from "@/lib/gemini-model";
 
 interface TopicImageInput {
   url: string;
@@ -149,8 +150,8 @@ Format your response as JSON:
 
 Start writing now. Output valid JSON only.`;
 
-  // Determine which model to use
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  // Writer uses the highest-quality configured model; flash is the fallback.
+  const modelName = geminiModel("writer");
   const fallbackModel = "gemini-2.5-flash";
 
   // Try these endpoints in order:
@@ -314,7 +315,7 @@ Respond with valid JSON only. No markdown, no code fences, no extra text.
 Example:
 {"suggestedTitle":"Your Title Here","description":"Short description. Second sentence.","keywords":["keyword1","keyword2","keyword3"]}`;
 
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = geminiModel("agent");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
     method: "POST",
@@ -390,7 +391,7 @@ Respond with JSON only:
   ]
 }`;
 
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = geminiModel("agent");
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
   const response = await fetch(url, {
     method: "POST",

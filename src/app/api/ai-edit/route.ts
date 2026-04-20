@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSiteFromRequest } from "@/lib/get-site";
+import { geminiModel } from "@/lib/gemini-model";
 
 export const maxDuration = 60;
 
@@ -53,7 +54,7 @@ RULES:
 - Return ONLY the full edited article body in markdown. No wrapping, no explanation.`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel("editor")}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

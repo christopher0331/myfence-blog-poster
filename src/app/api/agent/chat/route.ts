@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getSiteFromRequest } from "@/lib/get-site";
 import { TOOL_DECLARATIONS, runTool } from "@/lib/agent/tools";
+import { geminiModel } from "@/lib/gemini-model";
 
 // Needs full Node runtime for Supabase service role + Gemini SDK fetch.
 export const maxDuration = 300;
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelName = geminiModel("agent");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     type GeminiContent = {
