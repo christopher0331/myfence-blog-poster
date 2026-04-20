@@ -150,9 +150,10 @@ Format your response as JSON:
 
 Start writing now. Output valid JSON only.`;
 
-  // Writer uses the highest-quality configured model; flash is the fallback.
+  // Writer uses the highest-quality configured model; flash-preview then 2.5-flash are the fallbacks.
   const modelName = geminiModel("writer");
-  const fallbackModel = "gemini-2.5-flash";
+  const fallbackModel = "gemini-3-flash-preview";
+  const stableFallbackModel = "gemini-2.5-flash";
 
   // Try these endpoints in order:
   // 1. GEMINI_MODEL (or gemini-2.5-flash) with v1beta API
@@ -162,6 +163,7 @@ Start writing now. Output valid JSON only.`;
     `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
     `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`,
     `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${stableFallbackModel}:generateContent?key=${apiKey}`,
   ];
 
   let lastError: Error | null = null;
