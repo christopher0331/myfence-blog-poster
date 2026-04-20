@@ -65,18 +65,12 @@ export async function POST(req: NextRequest) {
     const modelName = geminiModel("agent");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
+    // We keep Gemini-native parts verbatim (including thoughtSignature),
+    // because Gemini 3+ requires the signature round-trip for function calls.
+    type GeminiPart = Record<string, any>;
     type GeminiContent = {
       role: "user" | "model";
-      parts: Array<
-        | { text: string }
-        | { functionCall: { name: string; args: Record<string, any> } }
-        | {
-            functionResponse: {
-              name: string;
-              response: Record<string, any>;
-            };
-          }
-      >;
+      parts: GeminiPart[];
     };
 
     const contents: GeminiContent[] = (messages as Array<{ role: string; content: string }>)
@@ -159,14 +153,11 @@ export async function POST(req: NextRequest) {
               break;
             }
 
-            // Push model turn (with calls) onto transcript
+            // Push the model turn verbatim so Gemini-3 `thoughtSignature`
+            // fields on functionCall parts survive the round-trip.
             contents.push({
               role: "model",
-              parts: parts.map((p) => {
-                if (p.functionCall) return { functionCall: p.functionCall };
-                if (typeof p.text === "string") return { text: p.text };
-                return { text: "" };
-              }),
+              parts: parts as GeminiPart[],
             });
 
             // Execute each tool
