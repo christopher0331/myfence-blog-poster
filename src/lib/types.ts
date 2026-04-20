@@ -14,6 +14,11 @@ export interface SiteConfig {
   location: string;
   notify_emails: string[];
   blog_path_prefix: string;
+  auto_publish_enabled?: boolean;
+  posts_per_week?: number;
+  posting_days?: number[];
+  posting_hour_utc?: number;
+  timezone?: string;
 }
 
 export interface TopicImage {

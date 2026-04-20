@@ -1,25 +1,17 @@
-import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import type { SiteConfig } from "@/lib/types";
+import { getAdminClient } from "@/lib/supabase-admin";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
 const DEFAULT_SITE_ID = "11111111-1111-1111-1111-111111111111";
 
-function getAdminClient() {
-  if (!supabaseSecretKey) throw new Error("SUPABASE_SECRET_KEY is not set");
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+const SITE_COLUMNS =
+  "id, name, abbreviation, domain, github_repo_owner, github_repo_name, github_default_branch, business_description, location, notify_emails, blog_path_prefix, auto_publish_enabled, posts_per_week, posting_days, posting_hour_utc, timezone";
 
 export async function getSites(): Promise<SiteConfig[]> {
   const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("sites")
-    .select(
-      "id, name, abbreviation, domain, github_repo_owner, github_repo_name, github_default_branch, business_description, location, notify_emails, blog_path_prefix",
-    )
+    .select(SITE_COLUMNS)
     .order("name", { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -30,9 +22,7 @@ export async function getSiteById(siteId: string): Promise<SiteConfig | null> {
   const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("sites")
-    .select(
-      "id, name, abbreviation, domain, github_repo_owner, github_repo_name, github_default_branch, business_description, location, notify_emails, blog_path_prefix",
-    )
+    .select(SITE_COLUMNS)
     .eq("id", siteId)
     .single();
 

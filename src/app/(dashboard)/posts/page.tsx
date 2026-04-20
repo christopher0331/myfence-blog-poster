@@ -1,16 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, FileText } from "lucide-react";
+import { Plus, Search, FileText, Image as ImageIcon, ArrowUpRight } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { draftsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useSite } from "@/lib/site-context";
 import type { BlogDraft } from "@/lib/types";
+
+type StatusFilter = "all" | "draft" | "review" | "scheduled" | "published" | "failed";
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "review", label: "Review" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "published", label: "Published" },
+  { value: "failed", label: "Failed" },
+];
+
+function statusBadge(status: string) {
+  switch (status) {
+    case "published":
+      return <Badge variant="success">● Published</Badge>;
+    case "scheduled":
+      return <Badge variant="warning">● Scheduled</Badge>;
+    case "review":
+      return <Badge variant="info">● In review</Badge>;
+    case "failed":
+      return <Badge variant="destructive">● Failed</Badge>;
+    default:
+      return <Badge variant="default">● Draft</Badge>;
+  }
+}
 
 function calcOverall(post: BlogDraft): number {
   const scores = [
@@ -27,9 +61,32 @@ function calcOverall(post: BlogDraft): number {
       : 0,
     post.featured_image?.trim() ? 100 : 0,
     post.category?.trim() ? 100 : 0,
-    post.title && post.meta_description && post.category ? 100 : 0,
   ];
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+function formatRelative(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatDateTime(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export default function PostsPage() {
@@ -38,9 +95,11 @@ export default function PostsPage() {
   const [drafts, setDrafts] = useState<BlogDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   useEffect(() => {
     loadDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadDrafts() {
@@ -70,185 +129,209 @@ export default function PostsPage() {
     }
   }
 
-  const statusVariant = (status: string) => {
-    switch (status) {
-      case "published": return "success" as const;
-      case "scheduled": return "warning" as const;
-      case "review": return "default" as const;
-      case "failed": return "destructive" as const;
-      default: return "secondary" as const;
-    }
-  };
+  const filtered = useMemo(() => {
+    return drafts.filter((d) => {
+      if (statusFilter !== "all" && d.status !== statusFilter) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        d.title?.toLowerCase().includes(q) ||
+        d.slug?.toLowerCase().includes(q) ||
+        d.category?.toLowerCase().includes(q)
+      );
+    });
+  }, [drafts, search, statusFilter]);
 
-  const filtered = drafts.filter(
-    (d) =>
-      d.title?.toLowerCase().includes(search.toLowerCase()) ||
-      d.slug?.toLowerCase().includes(search.toLowerCase()) ||
-      d.category?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const groups = [
-    { key: "scheduled", label: "Scheduled", items: filtered.filter((d) => d.status === "scheduled") },
-    { key: "review", label: "In Review", items: filtered.filter((d) => d.status === "review") },
-    { key: "draft", label: "Drafts", items: filtered.filter((d) => d.status === "draft") },
-    { key: "published", label: "Published", items: filtered.filter((d) => d.status === "published") },
-  ].filter((g) => g.items.length > 0);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: drafts.length };
+    for (const d of drafts) c[d.status] = (c[d.status] || 0) + 1;
+    return c;
+  }, [drafts]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">All Posts</h1>
-          <p className="text-muted-foreground mt-1">
-            {drafts.length} posts total — preview how they&apos;ll look on{" "}
-            {currentSite?.domain || "your site"}
+          <h1 className="text-2xl font-semibold tracking-tight">Posts</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {drafts.length} {drafts.length === 1 ? "post" : "posts"} on{" "}
+            <span className="font-mono text-foreground/80">
+              {currentSite?.domain || "your site"}
+            </span>
           </p>
         </div>
-        <Button onClick={createNewDraft} className="w-full sm:w-auto min-h-[44px] touch-manipulation">
-          <Plus className="h-4 w-4 mr-2" />
-          New Post
+        <Button onClick={createNewDraft} size="sm">
+          <Plus className="h-4 w-4" />
+          New post
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by title, slug, or category..."
-          className="pl-10"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search title, slug, category…"
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-muted/30 p-1 overflow-x-auto">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setStatusFilter(f.value)}
+              className={cn(
+                "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                statusFilter === f.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "rounded px-1 text-[10px]",
+                  statusFilter === f.value
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-muted/50 text-muted-foreground/70",
+                )}
+              >
+                {counts[f.value] ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* Table */}
       {loading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading posts...</div>
+        <Card className="p-12 text-center text-sm text-muted-foreground">
+          Loading posts…
+        </Card>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No posts found</h3>
-            <p className="text-muted-foreground mb-4">
-              {search ? "Try a different search term" : "Create your first blog post to get started"}
-            </p>
-            {!search && (
-              <Button onClick={createNewDraft}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Post
-              </Button>
-            )}
-          </CardContent>
+        <Card className="p-12 text-center">
+          <FileText className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <h3 className="text-sm font-semibold mb-1">No posts found</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {search || statusFilter !== "all"
+              ? "Try changing filters"
+              : "Start by creating your first post"}
+          </p>
+          {!search && statusFilter === "all" && (
+            <Button onClick={createNewDraft} size="sm">
+              <Plus className="h-4 w-4" />
+              Create post
+            </Button>
+          )}
         </Card>
       ) : (
-        <div className="space-y-10">
-          {groups.map((group) => (
-            <div key={group.key}>
-              <h2 className="text-xl font-semibold mb-4">
-                {group.label} ({group.items.length})
-              </h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {group.items.map((post) => {
-                  const overall = calcOverall(post);
-                  return (
-                    <Card
-                      key={post.id}
-                      className="group cursor-pointer hover:shadow-lg transition-shadow h-full flex flex-col"
-                      onClick={() => router.push(`/posts/${post.id}`)}
-                    >
-                      <CardHeader className="p-0 relative">
-                        {/* Image with 4:3 aspect ratio */}
-                        <div className="relative" style={{ aspectRatio: "4/3" }}>
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[44%]">Title</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="w-32">Quality</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((post) => {
+                const overall = calcOverall(post);
+                const schedule = post.scheduled_publish_at;
+                const published = post.published_at;
+                return (
+                  <TableRow
+                    key={post.id}
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/posts/${post.id}`)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-9 w-12 shrink-0 overflow-hidden rounded border border-border bg-muted">
                           {post.featured_image ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={post.featured_image}
-                              alt={post.title || "Post image"}
-                              className="w-full h-full object-cover rounded-t-lg group-hover:scale-105 transition-transform duration-300"
+                              alt=""
+                              className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="w-full h-full bg-muted flex items-center justify-center rounded-t-lg text-muted-foreground text-sm">
-                              No image
+                            <div className="flex h-full w-full items-center justify-center">
+                              <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
                             </div>
                           )}
                         </div>
-
-                        {/* Status badge overlay */}
-                        <Badge
-                          variant={statusVariant(post.status)}
-                          className="absolute top-2 right-2 text-xs shadow-sm"
-                        >
-                          {post.status}
-                        </Badge>
-                      </CardHeader>
-
-                      <CardContent className="p-5 flex-1 flex flex-col">
-                        {/* Category + read time */}
-                        <div className="flex items-center gap-2 mb-3">
-                          {post.category && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                              {post.category}
-                            </span>
-                          )}
-                          {post.read_time && (
-                            <span className="text-xs text-muted-foreground">
-                              {post.read_time}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Title */}
-                        <CardTitle className="text-lg mb-3 line-clamp-2 group-hover:text-primary transition-colors">
-                          {post.title || "Untitled Post"}
-                        </CardTitle>
-
-                        {/* Description */}
-                        <p className="text-sm text-muted-foreground mb-4 line-clamp-3 flex-1">
-                          {post.meta_description || "No description yet..."}
-                        </p>
-
-                        {/* Completeness bar */}
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className={cn(
-                                "h-full rounded-full transition-all",
-                                overall >= 80 ? "bg-green-500" :
-                                overall >= 50 ? "bg-yellow-500" : "bg-red-400"
-                              )}
-                              style={{ width: `${overall}%` }}
-                            />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium text-foreground">
+                            {post.title || <span className="text-muted-foreground italic">Untitled</span>}
                           </div>
-                          <span className={cn(
-                            "text-xs font-semibold",
-                            overall >= 80 ? "text-green-600" :
-                            overall >= 50 ? "text-yellow-600" : "text-red-500"
-                          )}>
-                            {overall}%
-                          </span>
+                          <div className="truncate text-xs text-muted-foreground font-mono">
+                            /{post.slug}
+                          </div>
                         </div>
-
-                        {/* Footer */}
-                        <div className="flex items-center justify-between pt-3 border-t">
-                          <span className="text-xs text-muted-foreground">
-                            {post.published_at
-                              ? new Date(post.published_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-                              : post.scheduled_publish_at
-                              ? `Scheduled: ${new Date(post.scheduled_publish_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
-                              : `Updated ${new Date(post.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
-                          </span>
-                          <Button variant="outline" size="sm" className="text-xs">
-                            Edit Post
-                          </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>{statusBadge(post.status)}</TableCell>
+                    <TableCell>
+                      {post.category ? (
+                        <Badge variant="outline" className="font-normal">
+                          {post.category}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground/60 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1 w-16 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              overall >= 80
+                                ? "bg-success"
+                                : overall >= 50
+                                  ? "bg-warning"
+                                  : "bg-destructive",
+                            )}
+                            style={{ width: `${overall}%` }}
+                          />
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {overall}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {published ? (
+                        <span className="text-success">
+                          Published {formatRelative(published)}
+                        </span>
+                      ) : schedule ? (
+                        formatDateTime(schedule)
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">
+                      {formatRelative(post.updated_at)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ArrowUpRight className="ml-auto h-4 w-4 text-muted-foreground/60" />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

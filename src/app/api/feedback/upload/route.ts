@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
+import { getAdminClient } from "@/lib/supabase-admin";
 
 const BUCKET = "feedback-attachments";
-
-function getAdminClient() {
-  if (!supabaseSecretKey) throw new Error("SUPABASE_SECRET_KEY is not set");
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 /** POST /api/feedback/upload — upload image for feedback; multipart form "file". Returns { url }. */
 export async function POST(req: NextRequest) {

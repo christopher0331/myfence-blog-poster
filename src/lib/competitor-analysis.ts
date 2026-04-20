@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase-admin";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -180,13 +180,7 @@ interface ExistingPost {
 }
 
 async function getExistingPosts(siteId: string): Promise<ExistingPost[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !key) return [];
-
-  const supabase = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const supabase = getAdminClient();
 
   const { data } = await supabase
     .from("blog_drafts")

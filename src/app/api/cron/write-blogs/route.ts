@@ -1,216 +1,225 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { generateBlogPost } from "@/lib/gemini";
 import { sanitizeMdxBody } from "@/lib/utils";
-import { getSiteFromRequest } from "@/lib/get-site";
+import { getAdminClient } from "@/lib/supabase-admin";
+import { getAutoEnabledSites, nextSlot } from "@/lib/scheduling";
+import type { SiteConfig } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
-
-function getAdminClient() {
-  if (!supabaseSecretKey) {
-    throw new Error("SUPABASE_SECRET_KEY is not set");
-  }
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
+type WriteResult = {
+  site: string;
+  siteId: string;
+  processed: number;
+  draftId?: string;
+  topicId?: string;
+  title?: string;
+  slug?: string;
+  scheduledFor?: string;
+  error?: string;
+  skipped?: string;
+};
 
 /**
  * GET /api/cron/write-blogs
- * Scheduled cron job to automatically write blogs from ready topics
- * 
- * This endpoint should be called by Netlify's scheduled functions or an external cron service
- * 
- * To set up in Netlify:
- * 1. Go to Netlify → Functions → Scheduled Functions
- * 2. Create a new scheduled function that calls this endpoint
- * 3. Set schedule (e.g., "0 9 * * *" for daily at 9 AM)
+ *
+ * Loops over every site with `auto_publish_enabled = true`, picks up to
+ * `posts_per_week` ready topics per site that don't already have a scheduled
+ * draft, writes the article with Gemini, and schedules the draft for the next
+ * open posting slot (Mon/Thu by default).
  */
 export async function GET(request: NextRequest) {
-  // Verify this is a legitimate cron request (optional: add auth header check)
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let topicId: string | null = null;
-  let currentSiteId: string | null = null;
-  
-  try {
-    const site = await getSiteFromRequest(request);
-    currentSiteId = site.id;
-    const supabase = getAdminClient();
-    const { data: topic } = await supabase
-      .from("blog_topics")
-      .select("*")
-      .eq("site_id", site.id)
-      .eq("status", "ready")
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .single();
+  const results: WriteResult[] = [];
+  const sites = await getAutoEnabledSites();
 
-    if (!topic) {
-      return NextResponse.json({
-        success: true,
-        message: `No ready topics to process for ${site.name}`,
+  if (sites.length === 0) {
+    return NextResponse.json({
+      success: true,
+      message: "No sites have auto_publish_enabled = true",
+      results,
+    });
+  }
+
+  for (const site of sites) {
+    try {
+      const result = await processOneTopicForSite(site);
+      results.push(result);
+    } catch (err: any) {
+      console.error(`[Cron][${site.name}] Failed:`, err);
+      results.push({
+        site: site.name,
+        siteId: site.id,
         processed: 0,
+        error: err.message || "unknown",
       });
     }
+  }
 
-    topicId = topic.id;
+  const totalWritten = results.reduce((n, r) => n + (r.processed || 0), 0);
+  return NextResponse.json({
+    success: true,
+    message: `Wrote ${totalWritten} post(s) across ${sites.length} site(s)`,
+    results,
+  });
+}
 
-    // Topic is already set to in_progress by claim_next_approved_topic
+async function processOneTopicForSite(site: SiteConfig): Promise<WriteResult> {
+  const supabase = getAdminClient();
 
-    // Generate blog post using Gemini
-    console.log(`[Cron] Generating blog post for topic: ${topic.title}`);
-    
-    // Update progress: Researching
+  // 1. Enforce weekly cap: how many drafts already scheduled or published this rolling week?
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: weekly } = await supabase
+    .from("blog_drafts")
+    .select("id", { count: "exact", head: true })
+    .eq("site_id", site.id)
+    .in("status", ["scheduled", "published"])
+    .gte("updated_at", oneWeekAgo);
+
+  const cap = site.posts_per_week ?? 2;
+  if ((weekly ?? 0) >= cap) {
+    return {
+      site: site.name,
+      siteId: site.id,
+      processed: 0,
+      skipped: `Weekly cap reached (${weekly}/${cap})`,
+    };
+  }
+
+  // 2. Claim the highest-priority ready topic
+  const { data: topic } = await supabase
+    .from("blog_topics")
+    .select("*")
+    .eq("site_id", site.id)
+    .eq("status", "ready")
+    .order("priority", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!topic) {
+    return {
+      site: site.name,
+      siteId: site.id,
+      processed: 0,
+      skipped: "No ready topics",
+    };
+  }
+
+  await supabase
+    .from("blog_topics")
+    .update({
+      status: "in_progress",
+      progress_status: "Researching topic and gathering information…",
+    })
+    .eq("id", topic.id)
+    .eq("site_id", site.id);
+
+  try {
     await supabase
       .from("blog_topics")
-      .update({ status: "in_progress", progress_status: "Researching topic and gathering information..." })
-      .eq("id", topic.id)
-      .eq("site_id", site.id);
-    
-    let blogPost;
-    try {
-      // Update progress: Generating content
-      await supabase
-        .from("blog_topics")
-        .update({ progress_status: "Generating blog content with AI..." })
-        .eq("id", topic.id)
-        .eq("site_id", site.id);
-      
-      blogPost = await generateBlogPost({
-        topic: topic.title,
-        keywords: topic.keywords || [],
-        researchNotes: topic.research_notes || undefined,
-        targetLength: 1500,
-        site,
-      });
-      console.log(`[Cron] Successfully generated blog post: ${blogPost.title}`);
-      
-      // Update progress: Saving draft
-      await supabase
-        .from("blog_topics")
-        .update({ progress_status: "Saving draft to database..." })
-        .eq("id", topic.id)
-        .eq("site_id", site.id);
-    } catch (geminiError: any) {
-      console.error("[Cron] Gemini API error:", geminiError);
-      throw new Error(`Gemini API failed: ${geminiError.message}`);
-    }
+      .update({ progress_status: "Generating blog content with AI…" })
+      .eq("id", topic.id);
 
-    // Generate slug from title
+    const blogPost = await generateBlogPost({
+      topic: topic.title,
+      keywords: topic.keywords || [],
+      researchNotes: topic.research_notes || undefined,
+      topicDescription: topic.description || undefined,
+      topicImages: Array.isArray(topic.topic_images) ? topic.topic_images : undefined,
+      targetLength: 1500,
+      site,
+    });
+
     const slug = blogPost.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // Check if draft with this slug already exists
-    const { data: existingDraft } = await supabase
+    const scheduledFor = await nextSlot(site);
+
+    await supabase
+      .from("blog_topics")
+      .update({ progress_status: "Scheduling draft…" })
+      .eq("id", topic.id);
+
+    // Upsert draft
+    const { data: existing } = await supabase
       .from("blog_drafts")
       .select("id")
       .eq("slug", slug)
       .eq("site_id", site.id)
-      .single();
+      .maybeSingle();
+
+    const draftPayload = {
+      title: blogPost.title,
+      body_mdx: sanitizeMdxBody(blogPost.content),
+      meta_description: blogPost.metaDescription,
+      category: blogPost.category || "",
+      read_time: blogPost.readTime || "5 min read",
+      featured_image: (blogPost as any).featuredImage || null,
+      structured_data: {
+        imageCaption: (blogPost as any).imageCaption,
+        layout: (blogPost as any).layout,
+        showArticleSummary: (blogPost as any).showArticleSummary,
+      },
+      topic_id: topic.id,
+      site_id: site.id,
+      status: "scheduled",
+      scheduled_publish_at: scheduledFor,
+    };
 
     let draftId: string;
-
-    if (existingDraft) {
-      // Update existing draft
-      const { data: updatedDraft, error: updateError } = await supabase
+    if (existing) {
+      const { data, error } = await supabase
         .from("blog_drafts")
-        .update({
-          title: blogPost.title,
-          body_mdx: sanitizeMdxBody(blogPost.content),
-          meta_description: blogPost.metaDescription,
-          category: blogPost.category || "",
-          read_time: blogPost.readTime || "5 min read",
-          topic_id: topic.id,
-          site_id: site.id,
-          status: "draft",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingDraft.id)
-        .select()
+        .update({ ...draftPayload, updated_at: new Date().toISOString() })
+        .eq("id", existing.id)
+        .select("id")
         .single();
-
-      if (updateError || !updatedDraft) {
-        throw new Error(`Failed to update draft: ${updateError?.message}`);
-      }
-      draftId = updatedDraft.id;
+      if (error || !data) throw new Error(`Failed to update draft: ${error?.message}`);
+      draftId = data.id;
     } else {
-      // Create new draft
-      const { data: newDraft, error: createError } = await supabase
+      const { data, error } = await supabase
         .from("blog_drafts")
-        .insert({
-          title: blogPost.title,
-          slug,
-          body_mdx: sanitizeMdxBody(blogPost.content),
-          meta_description: blogPost.metaDescription,
-          category: blogPost.category || "",
-          read_time: blogPost.readTime || "5 min read",
-          topic_id: topic.id,
-          site_id: site.id,
-          status: "draft",
-        })
-        .select()
+        .insert({ slug, ...draftPayload })
+        .select("id")
         .single();
-
-      if (createError || !newDraft) {
-        throw new Error(`Failed to create draft: ${createError?.message}`);
-      }
-      draftId = newDraft.id;
+      if (error || !data) throw new Error(`Failed to create draft: ${error?.message}`);
+      draftId = data.id;
     }
 
-    // Mark topic as completed — article has been written.
-    // The draft stays as "draft" until the user reviews and publishes it manually
-    // via the "Publish to GitHub" button in the post editor.
     await supabase
       .from("blog_topics")
-      .update({ status: "completed" })
+      .update({ status: "completed", progress_status: null })
       .eq("id", topic.id)
       .eq("site_id", site.id);
 
-    console.log(`[Cron] Draft saved (id: ${draftId}). Awaiting manual publish.`);
+    console.log(
+      `[Cron][${site.name}] Wrote "${blogPost.title}" → scheduled ${scheduledFor} (draft ${draftId})`,
+    );
 
-    return NextResponse.json({
-      success: true,
-      message: `Successfully wrote blog post: ${blogPost.title}`,
+    return {
+      site: site.name,
+      siteId: site.id,
       processed: 1,
-      topicId: topic.id,
       draftId,
+      topicId: topic.id,
       title: blogPost.title,
       slug,
-    });
-  } catch (error: any) {
-    console.error("Cron job error:", error);
-    
-    // If we have a topic ID, update its status to show the error
-    if (topicId) {
-      try {
-        await getAdminClient()
-          .from("blog_topics")
-          .update({ status: "ready" }) // Reset so it can be retried
-          .eq("id", topicId)
-          .eq("site_id", currentSiteId);
-      } catch (updateError) {
-        console.error("Failed to update topic error status:", updateError);
-      }
-    }
-
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to process cron job" },
-      { status: 500 },
-    );
+      scheduledFor,
+    };
+  } catch (err: any) {
+    await supabase
+      .from("blog_topics")
+      .update({ status: "ready", progress_status: null })
+      .eq("id", topic.id)
+      .eq("site_id", site.id);
+    throw err;
   }
 }

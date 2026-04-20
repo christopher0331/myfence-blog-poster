@@ -1,17 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
-
-function getAdminClient() {
-  if (!supabaseSecretKey) throw new Error("SUPABASE_SECRET_KEY is not set");
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-const BUCKET = "feedback-attachments";
+import { getAdminClient } from "@/lib/supabase-admin";
 
 /** GET /api/feedback — list threads (top-level) or one thread with replies when ?thread=id */
 export async function GET(req: NextRequest) {

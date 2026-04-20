@@ -4,44 +4,67 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 24 95% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 24 95% 53%;
+    /* Surfaces — near-black with very subtle blue tint (Supabase-style) */
+    --background: 220 13% 6%;
+    --foreground: 210 20% 96%;
+
+    --card: 220 13% 8%;
+    --card-foreground: 210 20% 96%;
+
+    --popover: 220 13% 9%;
+    --popover-foreground: 210 20% 96%;
+
+    /* Brand accent — Supabase emerald */
+    --primary: 152 62% 45%;
+    --primary-foreground: 150 30% 8%;
+
+    --secondary: 220 10% 14%;
+    --secondary-foreground: 210 20% 92%;
+
+    --muted: 220 10% 12%;
+    --muted-foreground: 220 8% 60%;
+
+    --accent: 220 10% 16%;
+    --accent-foreground: 210 20% 96%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 152 62% 45%;
+    --success-foreground: 150 30% 8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 38 40% 10%;
+    --info: 217 91% 60%;
+    --info-foreground: 210 20% 98%;
+
+    --border: 220 10% 16%;
+    --input: 220 10% 14%;
+    --ring: 152 62% 45%;
+
     --radius: 0.5rem;
   }
 
+  /* Keep .dark for compatibility — identical to :root */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 24 95% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 24 95% 53%;
+    --background: 220 13% 6%;
+    --foreground: 210 20% 96%;
+    --card: 220 13% 8%;
+    --card-foreground: 210 20% 96%;
+    --popover: 220 13% 9%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 152 62% 45%;
+    --primary-foreground: 150 30% 8%;
+    --secondary: 220 10% 14%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 220 10% 12%;
+    --muted-foreground: 220 8% 60%;
+    --accent: 220 10% 16%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 10% 16%;
+    --input: 220 10% 14%;
+    --ring: 152 62% 45%;
   }
 }
 
@@ -49,9 +72,67 @@
   * {
     @apply border-border;
   }
+  html {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Scrollbar — subtle, Supabase-style */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 6px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* Selection */
+  ::selection {
+    background: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer components {
+  /* Dashboard container for consistent page width + padding */
+  .page-container {
+    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8;
+  }
+
+  .surface {
+    @apply rounded-lg border border-border bg-card;
+  }
+
+  .surface-muted {
+    @apply rounded-lg border border-border bg-muted/40;
+  }
+
+  /* Keyboard/inline-code look */
+  .kbd {
+    @apply inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground;
+  }
+
+  /* Soft dot indicator */
+  .status-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full;
   }
 }

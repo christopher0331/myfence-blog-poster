@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, Send, Loader2, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 
 interface ChatMessage {
   role: "user" | "ai";
@@ -54,14 +55,9 @@ export default function AIChatBar({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/ai-edit", {
+      const response = await apiFetch("/api/ai-edit", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-site-id":
-            window.localStorage.getItem("selected-site-id") ||
-            "11111111-1111-1111-1111-111111111111",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction,
           bodyMdx,

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import CompletenessTracker from "@/components/editor/CompletenessTracker";
 import MDXPreview from "@/components/editor/MDXPreview";
 import AIChatBar from "@/components/editor/AIChatBar";
-import { draftsApi } from "@/lib/api";
+import { draftsApi, apiFetch } from "@/lib/api";
 import { ArrowLeft, Save, Send, Trash2, Calendar, Github } from "lucide-react";
 import type { BlogDraft, DraftStatus } from "@/lib/types";
 
@@ -129,14 +129,9 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     
     setPublishing(true);
     try {
-      const response = await fetch("/api/publish", {
+      const response = await apiFetch("/api/publish", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-site-id":
-            window.localStorage.getItem("selected-site-id") ||
-            "11111111-1111-1111-1111-111111111111",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ draftId: draft.id }),
       });
 

@@ -276,60 +276,62 @@ export default function TopicsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Research Topics</h1>
-        <p className="text-muted-foreground mt-1">
-          Add your topic ideas. AI will research each one and suggest a title and description, then you can add images for the article.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Topics</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Research ideas with AI or write direct instructions. Topics marked{" "}
+            <span className="font-mono text-foreground/80">ready</span> are auto-picked by the
+            cron and scheduled 2× per week.
+          </p>
+        </div>
       </div>
 
       {/* User idea input + Research */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Add a topic</CardTitle>
-          {/* Tab switcher */}
-          <div className="flex gap-1 mt-2 border-b">
-            <button
-              type="button"
-              onClick={() => setInputMode("research")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                inputMode === "research"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Research idea with AI
-            </button>
-            <button
-              type="button"
-              onClick={() => setInputMode("direct")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                inputMode === "direct"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Direct instructions
-            </button>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle>Add a topic</CardTitle>
+            <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+              <button
+                type="button"
+                onClick={() => setInputMode("research")}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  inputMode === "research"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Research with AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode("direct")}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                  inputMode === "direct"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Direct instructions
+              </button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {inputMode === "research" ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Enter a short idea (e.g. &quot;steel vs wood posts&quot; or &quot;fence staining in your area&quot;). AI will research it and suggest a title and article scope.
-              </p>
               <div className="flex gap-2">
                 <Input
                   value={ideaInput}
                   onChange={(e) => setIdeaInput(e.target.value)}
-                  placeholder={`e.g., steel vs wood fence posts, fence staining ${currentSite?.location || "local"}...`}
+                  placeholder={`Short idea — e.g., staining a ${currentSite?.location || "local"} fence…`}
                   className="flex-1"
                   onKeyDown={(e) => e.key === "Enter" && handleResearchIdea()}
                 />
                 <Button onClick={handleResearchIdea} disabled={!ideaInput.trim() || investigating}>
-                  {investigating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                  Research with AI
+                  {investigating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Research
                 </Button>
               </div>
               <Button variant="ghost" size="sm" onClick={handleSuggestIdeas} disabled={suggesting}>
@@ -385,9 +387,6 @@ export default function TopicsPage() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                Write exactly what you want in the article &mdash; structure, sections, talking points, tone, anything. The AI will follow your instructions when writing.
-              </p>
               <div>
                 <label className="text-sm font-medium mb-1 block">Article title</label>
                 <Input

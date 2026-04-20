@@ -8,7 +8,7 @@ function getCurrentSiteId() {
   return window.localStorage.getItem("selected-site-id") || DEFAULT_SITE_ID;
 }
 
-async function apiFetch(input: string, init?: RequestInit) {
+export async function apiFetch(input: string, init?: RequestInit) {
   const headers = new Headers(init?.headers || {});
   headers.set("x-site-id", getCurrentSiteId());
   return fetch(input, { ...init, headers });

@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
-
-function getAdminClient() {
-  if (!supabaseSecretKey) throw new Error("SUPABASE_SECRET_KEY is not set");
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { getAdminClient } from "@/lib/supabase-admin";
 
 /** PATCH /api/feedback/[id] — update status (top-level only). Body: { status } */
 export async function PATCH(

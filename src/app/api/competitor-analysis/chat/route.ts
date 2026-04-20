@@ -1,19 +1,9 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import type { TopicStatus } from "@/lib/types";
 import { getSiteFromRequest } from "@/lib/get-site";
+import { getAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "edge";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY!;
-
-function getAdminClient() {
-  if (!supabaseSecretKey) throw new Error("SUPABASE_SECRET_KEY is not set");
-  return createClient(supabaseUrl, supabaseSecretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 interface CompactOpportunity {
   url: string;

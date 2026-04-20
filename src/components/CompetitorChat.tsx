@@ -14,6 +14,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { CompetitorOpportunity } from "@/lib/types";
+import { apiFetch } from "@/lib/api";
 
 interface ChatAction {
   type: string;
@@ -80,14 +81,9 @@ export default function CompetitorChat({
     setLoading(true);
 
     try {
-      const response = await fetch("/api/competitor-analysis/chat", {
+      const response = await apiFetch("/api/competitor-analysis/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-site-id":
-            window.localStorage.getItem("selected-site-id") ||
-            "11111111-1111-1111-1111-111111111111",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
           opportunities,
