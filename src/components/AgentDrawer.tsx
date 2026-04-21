@@ -121,7 +121,13 @@ export default function AgentDrawer() {
           }
         }
       } catch (err: any) {
-        appendAssistant(assistantMsg.id, `⚠️ ${err.message || "request failed"}`);
+        const msg = err?.message || "request failed";
+        // Fetch throws "Failed to fetch" when the connection drops mid-stream.
+        // Give more context since the real cause is usually a slow/long AI call.
+        const hint = msg.toLowerCase().includes("failed to fetch")
+          ? " (connection dropped — the AI call may have timed out or the API key needs billing enabled for Gemini 3.1 Pro)"
+          : "";
+        appendAssistant(assistantMsg.id, `⚠️ ${msg}${hint}`);
       } finally {
         if (streamIdRef.current === myTurn) setBusy(false);
       }
@@ -415,6 +421,10 @@ function summarizeResult(name: string, result: any): string {
       return `Topic deleted ${shortId(result.deleted)}`;
     case "delete_draft":
       return `Draft deleted ${shortId(result.deleted)}`;
+    case "move_draft":
+      return `Moved "${result.draft?.title || result.draft?.id}" to ${result.movedTo}`;
+    case "copy_draft":
+      return `Copied to ${result.copiedTo} as "${result.slug}"`;
     case "list_sites":
       return `${(result.sites || []).length} sites`;
     case "list_topics":

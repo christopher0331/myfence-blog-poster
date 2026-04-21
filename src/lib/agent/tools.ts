@@ -173,6 +173,38 @@ export const TOOL_DECLARATIONS = [
       required: ["draftId"],
     },
   },
+  {
+    name: "move_draft",
+    description:
+      "Move (reassign) an existing draft to a different site without re-generating its content. Use this when the user says 'move this post to X site'.",
+    parameters: {
+      type: "object",
+      properties: {
+        draftId: { type: "string" },
+        targetSite: {
+          type: "string",
+          description: "Domain or name of the destination site.",
+        },
+      },
+      required: ["draftId", "targetSite"],
+    },
+  },
+  {
+    name: "copy_draft",
+    description:
+      "Duplicate an existing draft to a different site (or same site) without re-generating. Original is kept.",
+    parameters: {
+      type: "object",
+      properties: {
+        draftId: { type: "string" },
+        targetSite: {
+          type: "string",
+          description: "Domain or name of the destination site.",
+        },
+      },
+      required: ["draftId", "targetSite"],
+    },
+  },
 ] as const;
 
 // ---------- Helpers ----------
@@ -522,6 +554,53 @@ export async function runTool(
         .eq("id", args.draftId);
       if (error) return { ok: false, error: error.message };
       return { ok: true, deleted: args.draftId };
+    }
+
+    case "move_draft": {
+      const sites = await getSites();
+      const target = matchSite(sites, args.targetSite);
+      if (!target) return { ok: false, error: `Site not found: ${args.targetSite}` };
+      const { data, error } = await supabase
+        .from("blog_drafts")
+        .update({ site_id: target.id, topic_id: null })
+        .eq("id", args.draftId)
+        .select("id, title, slug, site_id")
+        .single();
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, draft: data, movedTo: target.domain };
+    }
+
+    case "copy_draft": {
+      const sites = await getSites();
+      const target = matchSite(sites, args.targetSite);
+      if (!target) return { ok: false, error: `Site not found: ${args.targetSite}` };
+      const { data: src, error: srcErr } = await supabase
+        .from("blog_drafts")
+        .select("*")
+        .eq("id", args.draftId)
+        .single();
+      if (srcErr || !src) return { ok: false, error: "Draft not found" };
+      // Ensure unique slug in target site
+      const slug = `${src.slug}-copy`;
+      const { data: copy, error: copyErr } = await supabase
+        .from("blog_drafts")
+        .insert({
+          ...src,
+          id: undefined,
+          site_id: target.id,
+          topic_id: null,
+          slug,
+          status: "draft",
+          published_at: null,
+          github_pr_url: null,
+          scheduled_publish_at: null,
+          created_at: undefined,
+          updated_at: undefined,
+        })
+        .select("id, title, slug")
+        .single();
+      if (copyErr || !copy) return { ok: false, error: copyErr?.message || "copy failed" };
+      return { ok: true, newDraftId: copy.id, slug: copy.slug, copiedTo: target.domain };
     }
 
     default:

@@ -190,11 +190,19 @@ export async function POST(req: NextRequest) {
             // loop for another model turn
           }
         } catch (err: any) {
-          send({ event: "error", error: err.message || "agent failure" });
+          const msg = err?.message || String(err) || "agent failure";
+          // Include a hint when the error looks like a Gemini billing/quota issue
+          const hint =
+            msg.includes("403") || msg.toLowerCase().includes("permission")
+              ? " — this may mean your Gemini API key needs billing enabled for the 3.1 Pro model."
+              : msg.includes("429") || msg.toLowerCase().includes("quota")
+              ? " — you've hit the API rate limit. Try again in a moment."
+              : "";
+          send({ event: "error", error: msg + hint });
         } finally {
           clearInterval(keepalive);
-          send({ event: "done" });
-          controller.close();
+          try { send({ event: "done" }); } catch { /* stream already closed */ }
+          try { controller.close(); } catch { /* already closed */ }
         }
       },
     });

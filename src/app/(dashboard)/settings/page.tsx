@@ -15,6 +15,7 @@ import {
   Save,
   Loader2,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { useSite } from "@/lib/site-context";
 import { cn } from "@/lib/utils";
@@ -195,6 +196,61 @@ export default function SettingsPage() {
         </CardFooter>
       </Card>
 
+      {/* AI Models */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/15 text-primary">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle>AI Models</CardTitle>
+              <CardDescription>
+                Gemini models used for each task. Set via env vars — changes require a redeploy.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <ModelField
+              label="Writer"
+              envVar="GEMINI_MODEL_WRITER"
+              description="Blog post generation"
+              recommended="gemini-3.1-pro-preview"
+            />
+            <ModelField
+              label="Editor"
+              envVar="GEMINI_MODEL_EDITOR"
+              description="Inline AI edits"
+              recommended="gemini-3-flash-preview"
+            />
+            <ModelField
+              label="Agent"
+              envVar="GEMINI_MODEL_AGENT"
+              description="Chat & tool calls"
+              recommended="gemini-3-flash-preview"
+            />
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground/80">To change models</p>
+            <p>Add to <code className="font-mono bg-muted px-1 rounded">.env.local</code> locally or Netlify → Site settings → Environment variables, then redeploy:</p>
+            <pre className="mt-2 font-mono bg-muted/60 rounded p-2 text-[11px] overflow-x-auto whitespace-pre">{`GEMINI_MODEL_WRITER=gemini-3.1-pro-preview\nGEMINI_MODEL_EDITOR=gemini-3-flash-preview\nGEMINI_MODEL_AGENT=gemini-3-flash-preview`}</pre>
+            <p className="pt-1">
+              <strong>gemini-3.1-pro-preview</strong> requires billing enabled on your Google Cloud project.{" "}
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                Manage API key →
+              </a>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* GitHub */}
       <Card>
         <CardHeader>
@@ -297,6 +353,53 @@ export default function SettingsPage() {
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+const GEMINI_MODELS = [
+  { id: "gemini-3.1-pro-preview", label: "3.1 Pro Preview", tier: "paid" },
+  { id: "gemini-3.1-pro-preview-customtools", label: "3.1 Pro (Custom Tools)", tier: "paid" },
+  { id: "gemini-3-flash-preview", label: "3 Flash Preview", tier: "free" },
+  { id: "gemini-3.1-flash-lite-preview", label: "3.1 Flash Lite", tier: "free" },
+  { id: "gemini-2.5-pro", label: "2.5 Pro (stable)", tier: "paid" },
+  { id: "gemini-2.5-flash", label: "2.5 Flash (stable)", tier: "free" },
+];
+
+function ModelField({
+  label,
+  envVar,
+  description,
+  recommended,
+}: {
+  label: string;
+  envVar: string;
+  description: string;
+  recommended: string;
+}) {
+  const current = GEMINI_MODELS.find((m) => m.id === recommended);
+  return (
+    <div>
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1.5">
+        {label}
+        <span className="normal-case font-normal text-[10px] text-muted-foreground/60">— {description}</span>
+      </div>
+      <div className="rounded-md border border-border bg-muted/40 px-2.5 py-2">
+        <div className="font-mono text-xs text-foreground/90 truncate">{recommended}</div>
+        {current && (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.5 rounded-full border",
+              current.tier === "paid"
+                ? "border-warning/40 bg-warning/10 text-warning"
+                : "border-success/40 bg-success/10 text-success"
+            )}>
+              {current.tier === "paid" ? "billing req'd" : "free tier ok"}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono">{envVar}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
