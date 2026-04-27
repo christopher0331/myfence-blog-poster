@@ -75,6 +75,13 @@ export const draftsApi = {
     });
     await handleResponse(response);
   },
+
+  async publish(id: string): Promise<{ success: boolean; error?: string; entry?: unknown; result?: unknown }> {
+    const response = await apiFetch(`${API_BASE}/drafts/${id}/publish`, {
+      method: "POST",
+    });
+    return handleResponse(response);
+  },
 };
 
 // Topics API

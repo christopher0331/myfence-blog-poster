@@ -8,12 +8,23 @@ function getOctokit() {
 }
 
 function getRepoInfo(site?: SiteConfig) {
-  return {
+  const info = {
     owner: site?.github_repo_owner || process.env.GITHUB_REPO_OWNER || "",
     repo: site?.github_repo_name || process.env.GITHUB_REPO_NAME || "myfence-clone",
     defaultBranch:
       site?.github_default_branch || process.env.GITHUB_DEFAULT_BRANCH || "main",
   };
+  if (!info.owner) {
+    throw new Error(
+      `GitHub repo owner is not configured for ${site?.name || site?.domain || "this site"}`,
+    );
+  }
+  if (!info.repo) {
+    throw new Error(
+      `GitHub repo name is not configured for ${site?.name || site?.domain || "this site"}`,
+    );
+  }
+  return info;
 }
 
 interface PublishBlogParams {
@@ -96,6 +107,7 @@ export async function commitBlogDirectly({
 }: PublishBlogParams): Promise<{ commitUrl: string; sha: string }> {
   const octokit = getOctokit();
   const { owner, repo, defaultBranch } = getRepoInfo(site);
+  console.log(`[GitHub] Publishing ${slug}.mdx to ${owner}/${repo}@${defaultBranch}`);
 
   const filePath = `src/content/blog/${slug}.mdx`;
   const message = commitMessage || `Add blog post: ${title}`;

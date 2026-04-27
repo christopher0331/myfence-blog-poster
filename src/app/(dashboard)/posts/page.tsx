@@ -96,6 +96,7 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadDrafts();
@@ -126,6 +127,22 @@ export default function PostsPage() {
       router.push(`/posts/${data.id}`);
     } catch (err) {
       console.error("Failed to create draft:", err);
+    }
+  }
+
+  async function retryPublish(post: BlogDraft, event: React.MouseEvent) {
+    event.stopPropagation();
+    setPublishingId(post.id);
+    try {
+      const result = await draftsApi.publish(post.id);
+      if (!result.success) {
+        alert(result.error || "Publish failed");
+      }
+      await loadDrafts();
+    } catch (err) {
+      alert((err as Error).message || "Publish failed");
+    } finally {
+      setPublishingId(null);
     }
   }
 
@@ -279,7 +296,22 @@ export default function PostsPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{statusBadge(post.status)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {statusBadge(post.status)}
+                        {post.status === "failed" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={publishingId === post.id}
+                            onClick={(event) => retryPublish(post, event)}
+                          >
+                            {publishingId === post.id ? "Retrying…" : "Retry publish"}
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {post.category ? (
                         <Badge variant="outline" className="font-normal">

@@ -30,7 +30,7 @@ export async function publishScheduledDrafts(limit = 10): Promise<PublishResult>
   const { data: drafts, error: fetchError } = await supabase
     .from("blog_drafts")
     .select("*, blog_topics(keywords)")
-    .eq("status", "scheduled")
+    .in("status", ["scheduled", "failed"])
     .not("scheduled_publish_at", "is", null)
     .lte("scheduled_publish_at", new Date().toISOString())
     .order("scheduled_publish_at", { ascending: true })
