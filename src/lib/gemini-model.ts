@@ -7,10 +7,10 @@
  *   - GEMINI_MODEL_AGENT    — used for agent chat / function-calling loops
  *   - GEMINI_MODEL          — global fallback if the task-specific var isn't set
  *
- * Defaults (as of Gemini 3.1 launch, Feb 2026):
- *   writer: gemini-3.1-pro-preview     — flagship reasoning, 1M context
- *   editor: gemini-3-flash-preview     — pro-level quality, flash speed
- *   agent:  gemini-3-flash-preview     — fast tool-calling loops
+ * Defaults:
+ *   writer: gemini-2.5-pro       — high quality long-form writing
+ *   editor: gemini-2.5-flash     — fast inline edits
+ *   agent:  gemini-2.5-flash     — fast tool-calling loops
  *
  * Stable fallbacks if preview models get deprecated: gemini-2.5-pro / gemini-2.5-flash.
  */
@@ -18,9 +18,9 @@
 export type GeminiTask = "writer" | "editor" | "agent";
 
 const DEFAULTS: Record<GeminiTask, string> = {
-  writer: "gemini-3.1-pro-preview",
-  editor: "gemini-3-flash-preview",
-  agent: "gemini-3-flash-preview",
+  writer: "gemini-2.5-pro",
+  editor: "gemini-2.5-flash",
+  agent: "gemini-2.5-flash",
 };
 
 export function geminiModel(task: GeminiTask): string {

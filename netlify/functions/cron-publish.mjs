@@ -1,5 +1,5 @@
 // Scheduled function that checks for due drafts and publishes them.
-// Runs every hour so posts go live within an hour of their scheduled time.
+// Runs every 5 minutes so posts go live shortly after their scheduled time.
 
 export default async (_req, _context) => {
   const base = process.env.URL || process.env.DEPLOY_URL;
@@ -19,5 +19,5 @@ export default async (_req, _context) => {
 };
 
 export const config = {
-  schedule: "0 * * * *",
+  schedule: "*/5 * * * *",
 };

@@ -417,7 +417,7 @@ export async function runTool(
           .from("blog_topics")
           .update({ status: "ready" })
           .eq("id", topicId);
-        return { ok: false, error: `Gemini failed: ${err.message}` };
+        return { ok: false, error: `Blog generation failed: ${err.message}` };
       }
 
       const slug = slugify(post.title);

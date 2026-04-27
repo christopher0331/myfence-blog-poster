@@ -1,9 +1,8 @@
 import { NextRequest } from "next/server";
 import { getSiteFromRequest } from "@/lib/get-site";
 import { TOOL_DECLARATIONS, runTool } from "@/lib/agent/tools";
-import { geminiModel } from "@/lib/gemini-model";
 
-// Needs full Node runtime for Supabase service role + Gemini SDK fetch.
+// Needs full Node runtime for Supabase service role + model API fetch.
 export const maxDuration = 300;
 
 const MAX_TOOL_ROUNDS = 8;
@@ -54,31 +53,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "GEMINI_API_KEY is not set" }),
+        JSON.stringify({ error: "OPENAI_API_KEY is not set" }),
         { status: 500, headers: { "Content-Type": "application/json" } },
       );
     }
 
-    const modelName = geminiModel("agent");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
-    // We keep Gemini-native parts verbatim (including thoughtSignature),
-    // because Gemini 3+ requires the signature round-trip for function calls.
-    type GeminiPart = Record<string, any>;
-    type GeminiContent = {
-      role: "user" | "model";
-      parts: GeminiPart[];
+    type OpenAIMessage = {
+      role: "system" | "user" | "assistant" | "tool";
+      content?: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+      tool_call_id?: string;
     };
 
-    const contents: GeminiContent[] = (messages as Array<{ role: string; content: string }>)
+    const openaiMessages: OpenAIMessage[] = [
+      {
+        role: "system",
+        content: systemInstruction({
+          name: site.name,
+          domain: site.domain,
+          location: site.location,
+          posts_per_week: site.posts_per_week,
+        }),
+      },
+      ...(messages as Array<{ role: string; content: string }>)
       .filter((m) => m.role === "user" || m.role === "assistant")
       .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: String(m.content || "") }],
-      }));
+        role: m.role as "user" | "assistant",
+        content: String(m.content || ""),
+      })),
+    ];
+
+    const tools = TOOL_DECLARATIONS.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      },
+    }));
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -96,31 +115,19 @@ export async function POST(req: NextRequest) {
           send({ event: "thinking" });
 
           for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-            const response = await fetch(url, {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
               body: JSON.stringify({
-                systemInstruction: {
-                  parts: [
-                    {
-                      text: systemInstruction({
-                        name: site.name,
-                        domain: site.domain,
-                        location: site.location,
-                        posts_per_week: site.posts_per_week,
-                      }),
-                    },
-                  ],
-                },
-                contents,
-                tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-                toolConfig: {
-                  functionCallingConfig: { mode: "AUTO" },
-                },
-                generationConfig: {
-                  temperature: 0.4,
-                  maxOutputTokens: 2048,
-                },
+                model: process.env.OPENAI_MODEL_AGENT || process.env.OPENAI_MODEL || "gpt-4o-mini",
+                messages: openaiMessages,
+                tools,
+                tool_choice: "auto",
+                temperature: 0.4,
+                max_tokens: 2048,
               }),
             });
 
@@ -128,73 +135,64 @@ export async function POST(req: NextRequest) {
               const err = await response.json().catch(() => ({}));
               send({
                 event: "error",
-                error: err.error?.message || `Gemini: ${response.status}`,
+                error: err.error?.message || `OpenAI: ${response.status}`,
               });
               break;
             }
 
             const data = await response.json();
-            const cand = data.candidates?.[0];
-            const parts: any[] = cand?.content?.parts || [];
-
-            // Collect any function calls; otherwise emit text and stop.
-            const toolCalls = parts.filter((p) => p.functionCall);
-            const textParts = parts
-              .filter((p) => typeof p.text === "string")
-              .map((p) => p.text)
-              .join("");
+            const message = data.choices?.[0]?.message;
+            const toolCalls = message?.tool_calls || [];
+            const text = String(message?.content || "");
 
             if (toolCalls.length === 0) {
-              if (textParts.trim()) {
-                send({ event: "message", text: textParts.trim() });
+              if (text.trim()) {
+                send({ event: "message", text: text.trim() });
               } else {
                 send({ event: "message", text: "(no response)" });
               }
               break;
             }
 
-            // Push the model turn verbatim so Gemini-3 `thoughtSignature`
-            // fields on functionCall parts survive the round-trip.
-            contents.push({
-              role: "model",
-              parts: parts as GeminiPart[],
+            openaiMessages.push({
+              role: "assistant",
+              content: message?.content || null,
+              tool_calls: toolCalls,
             });
 
-            // Execute each tool
-            const functionResponses: any[] = [];
             for (const call of toolCalls) {
-              const fname = call.functionCall.name;
-              const fargs = call.functionCall.args || {};
+              const fname = call.function?.name;
+              let fargs: Record<string, any> = {};
+              try {
+                fargs = JSON.parse(call.function?.arguments || "{}");
+              } catch {
+                fargs = {};
+              }
               send({ event: "tool_call", name: fname, args: fargs });
               try {
                 const result = await runTool(fname, fargs, { activeSite: site });
                 send({ event: "tool_result", name: fname, result });
-                functionResponses.push({
-                  functionResponse: { name: fname, response: result },
+                openaiMessages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: JSON.stringify(result),
                 });
               } catch (err: any) {
                 const errObj = { ok: false, error: err.message || "tool error" };
                 send({ event: "tool_result", name: fname, result: errObj });
-                functionResponses.push({
-                  functionResponse: { name: fname, response: errObj },
+                openaiMessages.push({
+                  role: "tool",
+                  tool_call_id: call.id,
+                  content: JSON.stringify(errObj),
                 });
               }
             }
-
-            // Feed results back as next user-role turn per Gemini function calling spec
-            contents.push({
-              role: "user",
-              parts: functionResponses,
-            });
-
-            // loop for another model turn
           }
         } catch (err: any) {
           const msg = err?.message || String(err) || "agent failure";
-          // Include a hint when the error looks like a Gemini billing/quota issue
           const hint =
             msg.includes("403") || msg.toLowerCase().includes("permission")
-              ? " — this may mean your Gemini API key needs billing enabled for the 3.1 Pro model."
+              ? " — this may mean your OpenAI API key/project does not have access to the configured model."
               : msg.includes("429") || msg.toLowerCase().includes("quota")
               ? " — you've hit the API rate limit. Try again in a moment."
               : "";

@@ -45,6 +45,56 @@ function buildFallbackMeta(topic: string, site?: SiteConfig): string {
   return base.length > 160 ? base.slice(0, 157).trimEnd() + "..." : base;
 }
 
+function parseGeneratedBlogResponse(
+  generatedText: string,
+  topic: string,
+  site?: SiteConfig,
+): GeminiBlogResponse {
+  let jsonText = generatedText.trim();
+  if (jsonText.startsWith("```json")) {
+    jsonText = jsonText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
+  } else if (jsonText.startsWith("```")) {
+    jsonText = jsonText.replace(/^```\n?/, "").replace(/\n?```$/, "");
+  }
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    let content = parsed.content ?? parsed.body ?? "";
+    if (typeof content !== "string" || content.trim().length === 0) {
+      content = generatedText;
+    }
+    if (content.trimStart().startsWith("{")) {
+      content = `# ${parsed.title || topic}\n\nArticle content could not be extracted. Please retry.`;
+    }
+    return {
+      title: parsed.title || topic,
+      content,
+      metaDescription: parsed.metaDescription || buildFallbackMeta(topic, site),
+      category: parsed.category,
+      readTime: parsed.readTime || "5 min read",
+      featuredImage: parsed.featuredImage,
+      imageCaption: parsed.imageCaption,
+      layout: parsed.layout,
+      showArticleSummary: parsed.showArticleSummary,
+    };
+  } catch {
+    const titleMatch = generatedText.match(/title["\s:]+"([^"]+)"/i) ||
+                      generatedText.match(/#\s+(.+)/);
+    const title = titleMatch ? titleMatch[1].trim() : topic;
+    const isLikelyJson = generatedText.trimStart().startsWith("{");
+    const content = isLikelyJson
+      ? `# ${title}\n\nResponse was not valid JSON. Please try writing this topic again.`
+      : generatedText;
+
+    return {
+      title,
+      content,
+      metaDescription: buildFallbackMeta(topic, site),
+      readTime: "5 min read",
+    };
+  }
+}
+
 /**
  * Generates a blog post using Google Gemini API
  */
@@ -57,11 +107,6 @@ export async function generateBlogPost({
   targetLength = 1500,
   site,
 }: GeminiBlogRequest): Promise<GeminiBlogResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
-
   const keywordsList = keywords.length > 0 ? keywords.join(", ") : "general fencing topics";
   const researchContext = researchNotes
     ? `\n\nAdditional research context:\n${researchNotes}`
@@ -150,9 +195,60 @@ Format your response as JSON:
 
 Start writing now. Output valid JSON only.`;
 
-  // Writer uses the highest-quality configured model; flash-preview then 2.5-flash are the fallbacks.
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (openaiApiKey) {
+    try {
+      console.log("[OpenAI] Generating blog post");
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openaiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL_WRITER || process.env.OPENAI_MODEL || "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert SEO blog writer. Return valid JSON only.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 8192,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || `OpenAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const generatedText = data.choices?.[0]?.message?.content;
+      if (!generatedText) throw new Error("Invalid response from OpenAI API");
+      return parseGeneratedBlogResponse(generatedText, topic, site);
+    } catch (error: any) {
+      console.error("OpenAI blog generation error:", error);
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error(`OpenAI failed: ${error.message}`);
+      }
+      console.log("[OpenAI] Falling back to Gemini");
+    }
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not set and GEMINI_API_KEY is not set");
+  }
+
+  // Gemini fallback.
   const modelName = geminiModel("writer");
-  const fallbackModel = "gemini-3-flash-preview";
+  const fallbackModel = "gemini-2.5-flash";
   const stableFallbackModel = "gemini-2.5-flash";
 
   // Try these endpoints in order:
@@ -232,55 +328,7 @@ Start writing now. Output valid JSON only.`;
     }
 
     const generatedText = data.candidates[0].content.parts[0].text;
-
-    // Try to parse JSON from the response
-    // Gemini might wrap JSON in markdown code blocks
-    let jsonText = generatedText.trim();
-    if (jsonText.startsWith("```json")) {
-      jsonText = jsonText.replace(/^```json\n?/, "").replace(/\n?```$/, "");
-    } else if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/^```\n?/, "").replace(/\n?```$/, "");
-    }
-
-    try {
-      const parsed = JSON.parse(jsonText);
-      // Ensure we use the article body, never the raw JSON string
-      let content = parsed.content ?? parsed.body ?? "";
-      if (typeof content !== "string" || content.trim().length === 0) {
-        content = generatedText;
-      }
-      if (content.trimStart().startsWith("{")) {
-        // Accidentally got raw JSON as content; use a safe fallback
-        content = `# ${parsed.title || topic}\n\nArticle content could not be extracted. Please retry.`;
-      }
-      return {
-        title: parsed.title || topic,
-        content,
-        metaDescription: parsed.metaDescription || buildFallbackMeta(topic, site),
-        category: parsed.category,
-        readTime: parsed.readTime || "5 min read",
-        featuredImage: parsed.featuredImage,
-        imageCaption: parsed.imageCaption,
-        layout: parsed.layout,
-        showArticleSummary: parsed.showArticleSummary,
-      };
-    } catch (parseError) {
-      // If JSON parsing fails, do not use raw JSON as body
-      const titleMatch = generatedText.match(/title["\s:]+"([^"]+)"/i) ||
-                        generatedText.match(/#\s+(.+)/);
-      const title = titleMatch ? titleMatch[1].trim() : topic;
-      const isLikelyJson = generatedText.trimStart().startsWith("{");
-      const content = isLikelyJson
-        ? `# ${title}\n\nResponse was not valid JSON. Please try writing this topic again.`
-        : generatedText;
-
-      return {
-        title,
-        content,
-        metaDescription: buildFallbackMeta(topic, site),
-        readTime: "5 min read",
-      };
-    }
+    return parseGeneratedBlogResponse(generatedText, topic, site);
   } catch (error: any) {
     console.error("Gemini API error:", error);
     throw new Error(`Failed to generate blog post: ${error.message}`);

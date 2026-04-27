@@ -3,6 +3,7 @@ import { generateBlogPost } from "@/lib/gemini";
 import { sanitizeMdxBody } from "@/lib/utils";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { getAutoEnabledSites, nextSlot } from "@/lib/scheduling";
+import { publishScheduledDrafts } from "@/lib/publish-scheduled";
 import type { SiteConfig } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const publishResult = await publishScheduledDrafts();
   const results: WriteResult[] = [];
   const sites = await getAutoEnabledSites();
 
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "No sites have auto_publish_enabled = true",
+      publishResult,
       results,
     });
   }
@@ -64,7 +67,8 @@ export async function GET(request: NextRequest) {
   const totalWritten = results.reduce((n, r) => n + (r.processed || 0), 0);
   return NextResponse.json({
     success: true,
-    message: `Wrote ${totalWritten} post(s) across ${sites.length} site(s)`,
+    message: `Published ${publishResult.published} due post(s), failed ${publishResult.failed}; wrote ${totalWritten} post(s) across ${sites.length} site(s)`,
+    publishResult,
     results,
   });
 }
