@@ -181,6 +181,9 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
     { label: "Category", key: "category", value: draft.completeness?.category ?? 0 },
     { label: "Structured Data", key: "structured_data", value: draft.completeness?.structured_data ?? 0 },
   ];
+  const activityLog = Array.isArray(draft.structured_data?.activityLog)
+    ? draft.structured_data.activityLog
+    : [];
 
   return (
     <div className="space-y-6">
@@ -306,6 +309,44 @@ export default function PostEditorPage({ params }: PostEditorPageProps) {
               </CardContent>
             </Card>
           )}
+
+          <Card className="mt-4">
+            <CardContent className="p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                Activity Log
+              </p>
+              {activityLog.length > 0 ? (
+                <div className="space-y-3">
+                  {activityLog.slice(0, 10).map((entry: any, index: number) => (
+                    <div key={`${entry.at || index}-${index}`} className="border-l-2 border-border pl-3">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            entry.status === "success"
+                              ? "success"
+                              : entry.status === "error"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                          className="text-[10px]"
+                        >
+                          {entry.status || "info"}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground">
+                          {entry.at ? new Date(entry.at).toLocaleString() : "Unknown time"}
+                        </span>
+                      </div>
+                      <p className="text-xs mt-1">{entry.message}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No publish or automation events have been logged yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Main Content Area - Rows */}

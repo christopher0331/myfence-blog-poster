@@ -4,6 +4,7 @@ import { sanitizeMdxBody } from "@/lib/utils";
 import { getAdminClient } from "@/lib/supabase-admin";
 import { getAutoEnabledSites, nextSlot } from "@/lib/scheduling";
 import { publishScheduledDrafts } from "@/lib/publish-scheduled";
+import { appendDraftActivity } from "@/lib/draft-activity";
 import type { SiteConfig } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -171,6 +172,14 @@ async function processOneTopicForSite(site: SiteConfig): Promise<WriteResult> {
         imageCaption: (blogPost as any).imageCaption,
         layout: (blogPost as any).layout,
         showArticleSummary: (blogPost as any).showArticleSummary,
+        activityLog: [
+          {
+            at: new Date().toISOString(),
+            action: "write",
+            status: "success",
+            message: `AI generated and scheduled this post for ${new Date(scheduledFor).toLocaleString()}.`,
+          },
+        ],
       },
       topic_id: topic.id,
       site_id: site.id,
@@ -180,9 +189,22 @@ async function processOneTopicForSite(site: SiteConfig): Promise<WriteResult> {
 
     let draftId: string;
     if (existing) {
+      const { data: currentDraft } = await supabase
+        .from("blog_drafts")
+        .select("structured_data")
+        .eq("id", existing.id)
+        .single();
       const { data, error } = await supabase
         .from("blog_drafts")
-        .update({ ...draftPayload, updated_at: new Date().toISOString() })
+        .update({
+          ...draftPayload,
+          structured_data: appendDraftActivity(currentDraft?.structured_data, {
+            action: "write",
+            status: "success",
+            message: `AI regenerated and scheduled this post for ${new Date(scheduledFor).toLocaleString()}.`,
+          }),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", existing.id)
         .select("id")
         .single();

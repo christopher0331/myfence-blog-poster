@@ -4,6 +4,7 @@ import { buildMdxFile } from "@/lib/frontmatter";
 import { notifyPostPublished } from "@/lib/notify";
 import { getSiteFromRequest } from "@/lib/get-site";
 import { getAdminClient } from "@/lib/supabase-admin";
+import { appendDraftActivity } from "@/lib/draft-activity";
 
 /**
  * POST /api/publish
@@ -33,6 +34,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (!draft.title || !draft.slug || !draft.body_mdx) {
+      await supabase
+        .from("blog_drafts")
+        .update({
+          structured_data: appendDraftActivity(draft.structured_data, {
+            action: "publish",
+            status: "error",
+            message: "Rejected before manual publish: missing title, slug, or body.",
+          }),
+        })
+        .eq("id", draftId)
+        .eq("site_id", site.id);
       return NextResponse.json(
         { error: "Draft must have a title, slug, and body content before publishing" },
         { status: 400 },
@@ -71,6 +83,12 @@ export async function POST(req: NextRequest) {
         status: "published",
         published_at: new Date().toISOString(),
         github_pr_url: commitUrl,
+        structured_data: appendDraftActivity(draft.structured_data, {
+          action: "publish",
+          status: "success",
+          message: "Manually published to GitHub successfully.",
+          details: { commitUrl },
+        }),
       })
       .eq("id", draftId)
       .eq("site_id", site.id);

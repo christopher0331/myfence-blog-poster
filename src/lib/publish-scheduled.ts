@@ -2,6 +2,7 @@ import { commitBlogDirectly } from "@/lib/github";
 import { buildMdxFile } from "@/lib/frontmatter";
 import { notifyPostPublished } from "@/lib/notify";
 import { getAdminClient } from "@/lib/supabase-admin";
+import { appendDraftActivity } from "@/lib/draft-activity";
 import type { SiteConfig } from "@/lib/types";
 
 export interface PublishedEntry {
@@ -67,7 +68,17 @@ export async function publishScheduledDrafts(limit = 10): Promise<PublishResult>
     const site = await getSite(draft.site_id);
 
     if (!draft.title || !draft.body_mdx || !draft.slug) {
-      await supabase.from("blog_drafts").update({ status: "failed" }).eq("id", draft.id);
+      await supabase
+        .from("blog_drafts")
+        .update({
+          status: "failed",
+          structured_data: appendDraftActivity(draft.structured_data, {
+            action: "publish",
+            status: "error",
+            message: "Rejected before publishing: missing title, slug, or body.",
+          }),
+        })
+        .eq("id", draft.id);
       failed++;
       entries.push({
         draftId: draft.id,
@@ -80,6 +91,17 @@ export async function publishScheduledDrafts(limit = 10): Promise<PublishResult>
     }
 
     try {
+      await supabase
+        .from("blog_drafts")
+        .update({
+          structured_data: appendDraftActivity(draft.structured_data, {
+            action: "publish",
+            status: "info",
+            message: `Publish attempt started for ${site?.domain || "unknown site"}.`,
+          }),
+        })
+        .eq("id", draft.id);
+
       const keywords = draft.blog_topics?.keywords?.length
         ? draft.blog_topics.keywords.join(", ")
         : undefined;
@@ -116,6 +138,12 @@ export async function publishScheduledDrafts(limit = 10): Promise<PublishResult>
           status: "published",
           published_at: new Date().toISOString(),
           github_pr_url: commitUrl,
+          structured_data: appendDraftActivity(draft.structured_data, {
+            action: "publish",
+            status: "success",
+            message: "Published to GitHub successfully.",
+            details: { commitUrl },
+          }),
         })
         .eq("id", draft.id);
 
@@ -139,7 +167,14 @@ export async function publishScheduledDrafts(limit = 10): Promise<PublishResult>
       console.error(`[Publish] Error publishing ${draft.slug}:`, err);
       await supabase
         .from("blog_drafts")
-        .update({ status: "failed" })
+        .update({
+          status: "failed",
+          structured_data: appendDraftActivity(draft.structured_data, {
+            action: "publish",
+            status: "error",
+            message: err.message || "Publish failed.",
+          }),
+        })
         .eq("id", draft.id);
       failed++;
       entries.push({
